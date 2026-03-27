@@ -8,6 +8,7 @@ final class CompanionOverlayView: NSView {
     private let quipContainer = NSView(frame: .zero)
     private let quipLabel = NSTextField(labelWithString: "")
     private var currentStickerName: String?
+    private let debugMonitor = DebugMonitor.shared
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -65,10 +66,12 @@ final class CompanionOverlayView: NSView {
 
     func update(pose: String, stickerName: String, quip: String?) {
         asciiLabel.stringValue = pose
-        if currentStickerName != stickerName {
-            stickerView.image = CompanionPersona.image(for: stickerName)
-            stickerView.isHidden = stickerView.image == nil
+        if currentStickerName != stickerName || stickerView.image == nil {
+            let image = CompanionPersona.image(for: stickerName)
+            stickerView.image = image
+            stickerView.isHidden = image == nil
             currentStickerName = stickerName
+            debugMonitor.recordStickerAsset(name: stickerName, loaded: image != nil, size: image?.size)
         }
         quipLabel.stringValue = quip ?? ""
         needsLayout = true
@@ -91,6 +94,13 @@ final class CompanionOverlayView: NSView {
 
         stickerView.imageScaling = .scaleProportionallyUpOrDown
         stickerView.isHidden = true
+        if debugMonitor.isEnabledForUI {
+            stickerView.wantsLayer = true
+            stickerView.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.12).cgColor
+            stickerView.layer?.borderColor = NSColor.systemOrange.withAlphaComponent(0.55).cgColor
+            stickerView.layer?.borderWidth = 1
+            stickerView.layer?.cornerRadius = 10
+        }
         addSubview(stickerView)
 
         quipContainer.wantsLayer = true

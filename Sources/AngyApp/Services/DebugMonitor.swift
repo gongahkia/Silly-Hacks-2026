@@ -18,6 +18,10 @@ final class DebugMonitor {
         isEnabled = environment["ANGY_DEBUG"] == "1"
     }
 
+    var isEnabledForUI: Bool {
+        isEnabled
+    }
+
     func announceIfEnabled() {
         guard isEnabled else { return }
         log("debug logging enabled")
@@ -75,6 +79,18 @@ final class DebugMonitor {
         log(
             "analysis source=\(extraction) chars=\(characters) confidence=\(confidence) anger=\(score) state=\(state.rawValue) sticker=\(stickerSummary) triggers=\(triggerSummary) quip=\(quipSummary)"
         )
+    }
+
+    func recordStickerAsset(name: String, loaded: Bool, size: CGSize?) {
+        guard isEnabled else { return }
+
+        if let size {
+            log(
+                "sticker asset name=\(name) loaded=\(loaded) size=\(Int(size.width))x\(Int(size.height))"
+            )
+        } else {
+            log("sticker asset name=\(name) loaded=\(loaded)")
+        }
     }
 
     private func maybeLogRates() {

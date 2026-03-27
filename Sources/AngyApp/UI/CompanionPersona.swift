@@ -110,14 +110,12 @@ enum CompanionPersona {
     }
 
     static func image(for stickerName: String) -> NSImage? {
-        guard let url = Bundle.module.url(
-            forResource: stickerName,
-            withExtension: "png",
-            subdirectory: "Stickers"
-        ) else {
-            return nil
-        }
+        let bundle = Bundle.module
+        let directURL = bundle.url(forResource: stickerName, withExtension: "png")
+        let nestedURL = bundle.url(forResource: stickerName, withExtension: "png", subdirectory: "Stickers")
+        let url = directURL ?? nestedURL
 
+        guard let url else { return nil }
         return NSImage(contentsOf: url)
     }
 
