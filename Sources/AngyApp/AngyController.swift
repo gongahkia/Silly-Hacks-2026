@@ -12,6 +12,7 @@ final class AngyController: NSObject {
     private let overlayController: CompanionOverlayController
     private let sentimentEngine: SentimentEngine
     private let textBuffer: RollingTextBuffer
+    private let debugMonitor = DebugMonitor.shared
 
     private var overlayTimer: Timer?
     private var analysisTimer: Timer?
@@ -34,6 +35,7 @@ final class AngyController: NSObject {
     }
 
     func start() {
+        debugMonitor.announceIfEnabled()
         promptForPermissionsIfNeeded()
         refreshWindowContext()
         analyzeSession()
@@ -93,6 +95,8 @@ final class AngyController: NSObject {
             trackedWindow = nil
             overlayController.hide()
         }
+
+        debugMonitor.recordOverlay(window: trackedWindow, state: companionState)
     }
 
     private func analyzeSession() {
@@ -111,8 +115,9 @@ final class AngyController: NSObject {
         }
 
         let permissions = permissionManager.status()
+        let extraction = extractObservation(for: window, permissions: permissions)
 
-        if let observation = extractObservation(for: window, permissions: permissions) {
+        if let observation = extraction.observation {
             textBuffer.append(observation, now: observation.timestamp)
         } else {
             textBuffer.prune()
@@ -127,11 +132,25 @@ final class AngyController: NSObject {
 
         angerScore = result.finalAngerScore
         companionState = result.currentState
-        updateStickerIfNeeded(matchedTriggers: result.matchedTriggers, currentState: result.currentState)
+        updateStickerIfNeeded(
+            matchedTriggers: result.matchedTriggers,
+            previousState: previousState,
+            currentState: result.currentState
+        )
         activeQuip = nextQuip(
             matchedTriggers: result.matchedTriggers,
             previousState: previousState,
             currentState: result.currentState
+        )
+
+        debugMonitor.recordAnalysis(
+            extraction: extraction.reason,
+            observation: extraction.observation,
+            angerScore: angerScore,
+            state: companionState,
+            stickerName: activeStickerName,
+            triggers: result.matchedTriggers,
+            quip: activeQuip
         )
 
         overlayController.present(
@@ -145,30 +164,48 @@ final class AngyController: NSObject {
     private func extractObservation(
         for window: TrackedWindow,
         permissions: PermissionStatus
-    ) -> TextObservation? {
+    ) -> (observation: TextObservation?, reason: String) {
         let now = Date()
 
         if permissions.accessibility,
            let rawText = accessibilityExtractor.extractText(
                 forBundleIdentifier: window.bundleID,
                 appName: window.appName
-           ),
-           rawText.count >= config.minimumMeaningfulTextLength {
-            return TextObservation(
-                timestamp: now,
-                source: .accessibility,
-                rawText: rawText,
-                normalizedText: TextNormalizer.normalize(rawText),
-                confidence: 1.0
-            )
+           ) {
+            if rawText.count >= config.minimumMeaningfulTextLength {
+                return (
+                    TextObservation(
+                        timestamp: now,
+                        source: .accessibility,
+                        rawText: rawText,
+                        normalizedText: TextNormalizer.normalize(rawText),
+                        confidence: 1.0
+                    ),
+                    "accessibility"
+                )
+            }
         }
 
         if permissions.screenRecording,
            let ocrObservation = ocrService.extractText(for: window) {
-            return ocrObservation
+            return (ocrObservation, "ocr")
         }
 
-        return nil
+        var reasons: [String] = []
+
+        if !permissions.accessibility {
+            reasons.append("accessibility_denied")
+        } else {
+            reasons.append("accessibility_empty_or_short")
+        }
+
+        if !permissions.screenRecording {
+            reasons.append("screen_recording_denied")
+        } else {
+            reasons.append("ocr_empty")
+        }
+
+        return (nil, reasons.joined(separator: "+"))
     }
 
     private func promptForPermissionsIfNeeded() {
@@ -207,12 +244,14 @@ final class AngyController: NSObject {
 
     private func updateStickerIfNeeded(
         matchedTriggers: [String],
+        previousState: CompanionState,
         currentState: CompanionState
     ) {
         let now = Date()
+        let stateChanged = previousState != currentState
         let canRotateSticker = nextStickerChangeDate.map { now >= $0 } ?? true
 
-        guard activeStickerName == nil || canRotateSticker else {
+        guard activeStickerName == nil || stateChanged || canRotateSticker else {
             return
         }
 

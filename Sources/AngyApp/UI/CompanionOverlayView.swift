@@ -1,18 +1,13 @@
-import AngyCore
 import AppKit
 import Foundation
 
 @MainActor
 final class CompanionOverlayView: NSView {
-    private let mascotBadge = NSView(frame: .zero)
-    private let mascotLabel = NSTextField(labelWithString: "🐼")
+    private let asciiLabel = NSTextField(labelWithString: "")
     private let stickerView = NSImageView(frame: .zero)
     private let quipContainer = NSView(frame: .zero)
     private let quipLabel = NSTextField(labelWithString: "")
-
-    private let badgeSize = CGSize(width: 54, height: 54)
-    private let stickerSize = CGSize(width: 72, height: 72)
-    private let horizontalGap: CGFloat = 10
+    private var currentStickerName: String?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -25,36 +20,38 @@ final class CompanionOverlayView: NSView {
     }
 
     override var fittingSize: NSSize {
-        let topRowWidth = badgeSize.width + horizontalGap + stickerSize.width
-        let topRowHeight = max(badgeSize.height, stickerSize.height)
+        let asciiSize = asciiLabel.sizeThatFits(width: 160)
+        let topRowWidth = asciiSize.width + (stickerView.isHidden ? 0 : 72 + 12)
+        let topRowHeight = max(asciiSize.height, stickerView.isHidden ? 0 : 72)
         let quipSize = quipLabel.stringValue.isEmpty ? .zero : quipLabel.sizeThatFits(width: 220)
         let width = max(topRowWidth, quipSize.width + 24)
         let height = topRowHeight + (quipSize == .zero ? 0 : quipSize.height + 18)
-        return NSSize(width: ceil(width), height: ceil(height))
+        return NSSize(width: max(120, width), height: max(74, height))
     }
 
     override func layout() {
         super.layout()
 
         let width = bounds.width
-        let topRowHeight = max(badgeSize.height, stickerSize.height)
-        let quipSize = quipLabel.stringValue.isEmpty ? .zero : quipLabel.sizeThatFits(width: max(220, width))
+        let stickerWidth: CGFloat = stickerView.isHidden ? 0 : 72
+        let asciiWidth = max(120, width - stickerWidth - (stickerView.isHidden ? 0 : 12))
+        let asciiSize = asciiLabel.sizeThatFits(width: asciiWidth)
+        let topRowHeight = max(asciiSize.height, stickerView.isHidden ? 0 : 72)
+        let quipSize = quipLabel.stringValue.isEmpty ? .zero : quipLabel.sizeThatFits(width: width - 24)
         let topRowY = quipSize == .zero ? 0 : quipSize.height + 18
 
-        mascotBadge.frame = NSRect(
+        asciiLabel.frame = NSRect(
             x: 0,
-            y: topRowY + (topRowHeight - badgeSize.height) / 2,
-            width: badgeSize.width,
-            height: badgeSize.height
+            y: topRowY + (topRowHeight - asciiSize.height) / 2,
+            width: asciiWidth,
+            height: asciiSize.height
         )
 
-        mascotLabel.frame = mascotBadge.bounds
-
         stickerView.frame = NSRect(
-            x: mascotBadge.frame.maxX + horizontalGap,
-            y: topRowY + (topRowHeight - stickerSize.height) / 2,
-            width: stickerSize.width,
-            height: stickerSize.height
+            x: asciiLabel.frame.maxX + (stickerView.isHidden ? 0 : 12),
+            y: topRowY + (topRowHeight - 72) / 2,
+            width: stickerWidth,
+            height: stickerWidth
         )
 
         if quipSize == .zero {
@@ -66,12 +63,14 @@ final class CompanionOverlayView: NSView {
         }
     }
 
-    func update(state: CompanionState, stickerName: String, quip: String?) {
-        mascotBadge.layer?.backgroundColor = CompanionPersona.color(for: state).withAlphaComponent(0.92).cgColor
-        mascotBadge.layer?.borderColor = CompanionPersona.color(for: state).highlight(withLevel: 0.22)?.cgColor
-        stickerView.image = CompanionPersona.image(for: stickerName)
+    func update(pose: String, stickerName: String, quip: String?) {
+        asciiLabel.stringValue = pose
+        if currentStickerName != stickerName {
+            stickerView.image = CompanionPersona.image(for: stickerName)
+            stickerView.isHidden = stickerView.image == nil
+            currentStickerName = stickerName
+        }
         quipLabel.stringValue = quip ?? ""
-        quipContainer.layer?.borderColor = CompanionPersona.color(for: state).withAlphaComponent(0.28).cgColor
         needsLayout = true
         invalidateIntrinsicContentSize()
     }
@@ -80,35 +79,29 @@ final class CompanionOverlayView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        mascotBadge.wantsLayer = true
-        mascotBadge.layer?.cornerRadius = badgeSize.width / 2
-        mascotBadge.layer?.borderWidth = 1
-        mascotBadge.layer?.shadowColor = NSColor.black.withAlphaComponent(0.25).cgColor
-        mascotBadge.layer?.shadowRadius = 12
-        mascotBadge.layer?.shadowOffset = CGSize(width: 0, height: -2)
-        addSubview(mascotBadge)
-
-        mascotLabel.font = NSFont.systemFont(ofSize: 28)
-        mascotLabel.alignment = .center
-        mascotLabel.backgroundColor = .clear
-        mascotLabel.textColor = .white
-        mascotBadge.addSubview(mascotLabel)
+        asciiLabel.font = NSFont(name: "Menlo-Bold", size: 18) ?? .monospacedSystemFont(ofSize: 18, weight: .bold)
+        asciiLabel.lineBreakMode = .byWordWrapping
+        asciiLabel.maximumNumberOfLines = 0
+        asciiLabel.alignment = .left
+        asciiLabel.backgroundColor = .clear
+        asciiLabel.textColor = NSColor.black.withAlphaComponent(0.92)
+        asciiLabel.translatesAutoresizingMaskIntoConstraints = false
+        asciiLabel.usesSingleLineMode = false
+        addSubview(asciiLabel)
 
         stickerView.imageScaling = .scaleProportionallyUpOrDown
-        stickerView.wantsLayer = true
-        stickerView.layer?.shadowColor = NSColor.black.withAlphaComponent(0.22).cgColor
-        stickerView.layer?.shadowRadius = 10
-        stickerView.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        stickerView.isHidden = true
         addSubview(stickerView)
 
         quipContainer.wantsLayer = true
-        quipContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.06, alpha: 0.82).cgColor
+        quipContainer.layer?.backgroundColor = NSColor(calibratedWhite: 1.0, alpha: 0.9).cgColor
         quipContainer.layer?.cornerRadius = 12
         quipContainer.layer?.borderWidth = 1
+        quipContainer.layer?.borderColor = NSColor.black.withAlphaComponent(0.14).cgColor
         addSubview(quipContainer)
 
         quipLabel.font = NSFont(name: "Menlo-Regular", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
-        quipLabel.textColor = NSColor(calibratedWhite: 0.96, alpha: 0.95)
+        quipLabel.textColor = NSColor.black.withAlphaComponent(0.9)
         quipLabel.lineBreakMode = .byWordWrapping
         quipLabel.maximumNumberOfLines = 2
         quipLabel.backgroundColor = .clear

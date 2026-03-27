@@ -7,6 +7,7 @@ final class CompanionOverlayController {
     private let config: AppConfig
     private let panel: CompanionOverlayPanel
     private let contentView: CompanionOverlayView
+    private var bobPhase = 0
 
     init(config: AppConfig) {
         self.config = config
@@ -16,7 +17,9 @@ final class CompanionOverlayController {
     }
 
     func present(window: TrackedWindow, state: CompanionState, stickerName: String, quip: String?) {
-        contentView.update(state: state, stickerName: stickerName, quip: quip)
+        bobPhase = (bobPhase + 1) % 2
+        let pose = CompanionPersona.pose(for: state, bobPhase: bobPhase)
+        contentView.update(pose: pose, stickerName: stickerName, quip: quip)
 
         let fittingSize = contentView.fittingSize
         let frame = overlayFrame(for: window.frame, overlaySize: fittingSize, preferredScreen: window.screenID)
