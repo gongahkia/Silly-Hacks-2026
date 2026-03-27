@@ -1,6 +1,12 @@
 # Angy
 
-Angy is a local macOS companion that watches the frontmost Codex window and hangs a tiny ASCII gremlin just outside the frame. It uses Accessibility text first, falls back to OCR, runs lightweight sentiment analysis with Apple `NaturalLanguage`, and reacts with escalating poses and quips when the session looks rough.
+![Angy mascot](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRb70TVbvcjEU8LZAsWyVCsrFZO2thUTz-zRw&s)
+
+Angy is a local macOS companion that watches the frontmost Codex window and hangs a tiny ASCII panda just outside the frame. It uses Accessibility text first, falls back to OCR, runs lightweight sentiment analysis with Apple `NaturalLanguage`, and reacts with escalating poses and quips when the session looks rough.
+
+## Mascot
+
+The official Angy mascot is the tiny back-turned panda. The in-app companion is still rendered as ASCII for the MVP, but the README, pitch, and visual identity should treat this panda as the character we are building around.
 
 ## What ships in this MVP
 
