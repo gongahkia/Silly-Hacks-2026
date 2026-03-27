@@ -20,7 +20,9 @@ final class AngyController: NSObject {
     private var angerScore = 0.0
     private var companionState: CompanionState = .calm
     private var activeQuip: String?
+    private var activeStickerName: String?
     private var lastQuipDate: Date?
+    private var nextStickerChangeDate: Date?
 
     init(config: AppConfig) {
         self.config = config
@@ -81,7 +83,12 @@ final class AngyController: NSObject {
     private func refreshWindowContext() {
         if let window = windowTracker.currentTrackedWindow() {
             trackedWindow = window
-            overlayController.present(window: window, state: companionState, quip: activeQuip)
+            overlayController.present(
+                window: window,
+                state: companionState,
+                stickerName: activeStickerName ?? CompanionPersona.defaultSticker(for: companionState),
+                quip: activeQuip
+            )
         } else {
             trackedWindow = nil
             overlayController.hide()
@@ -120,13 +127,19 @@ final class AngyController: NSObject {
 
         angerScore = result.finalAngerScore
         companionState = result.currentState
+        updateStickerIfNeeded(matchedTriggers: result.matchedTriggers, currentState: result.currentState)
         activeQuip = nextQuip(
             matchedTriggers: result.matchedTriggers,
             previousState: previousState,
             currentState: result.currentState
         )
 
-        overlayController.present(window: window, state: companionState, quip: activeQuip)
+        overlayController.present(
+            window: window,
+            state: companionState,
+            stickerName: activeStickerName ?? CompanionPersona.defaultSticker(for: companionState),
+            quip: activeQuip
+        )
     }
 
     private func extractObservation(
@@ -190,5 +203,26 @@ final class AngyController: NSObject {
 
         lastQuipDate = now
         return CompanionPersona.quip(for: currentState, triggers: matchedTriggers)
+    }
+
+    private func updateStickerIfNeeded(
+        matchedTriggers: [String],
+        currentState: CompanionState
+    ) {
+        let now = Date()
+        let canRotateSticker = nextStickerChangeDate.map { now >= $0 } ?? true
+
+        guard activeStickerName == nil || canRotateSticker else {
+            return
+        }
+
+        activeStickerName = CompanionPersona.stickerName(
+            for: currentState,
+            triggers: matchedTriggers,
+            previousStickerName: activeStickerName
+        )
+        nextStickerChangeDate = now.addingTimeInterval(
+            Double.random(in: config.stickerHoldMinimum...config.stickerHoldMaximum)
+        )
     }
 }

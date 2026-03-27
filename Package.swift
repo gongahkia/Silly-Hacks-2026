@@ -14,7 +14,10 @@ let package = Package(
         .executableTarget(
             name: "Angy",
             dependencies: ["AngyCore"],
-            path: "Sources/AngyApp"
+            path: "Sources/AngyApp",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "AngyCoreTests",

@@ -13,6 +13,8 @@ public struct AppConfig: Sendable, Equatable {
     public var smoothingFactor: Double
     public var decayFactor: Double
     public var hysteresis: Double
+    public var stickerHoldMinimum: TimeInterval
+    public var stickerHoldMaximum: TimeInterval
     public var calmUpperBound: Double
     public var curiousUpperBound: Double
     public var annoyedUpperBound: Double
@@ -30,6 +32,8 @@ public struct AppConfig: Sendable, Equatable {
         smoothingFactor: Double,
         decayFactor: Double,
         hysteresis: Double,
+        stickerHoldMinimum: TimeInterval,
+        stickerHoldMaximum: TimeInterval,
         calmUpperBound: Double,
         curiousUpperBound: Double,
         annoyedUpperBound: Double,
@@ -46,6 +50,8 @@ public struct AppConfig: Sendable, Equatable {
         self.smoothingFactor = smoothingFactor
         self.decayFactor = decayFactor
         self.hysteresis = hysteresis
+        self.stickerHoldMinimum = stickerHoldMinimum
+        self.stickerHoldMaximum = stickerHoldMaximum
         self.calmUpperBound = calmUpperBound
         self.curiousUpperBound = curiousUpperBound
         self.annoyedUpperBound = annoyedUpperBound
@@ -66,6 +72,8 @@ public extension AppConfig {
         smoothingFactor: 0.78,
         decayFactor: 0.82,
         hysteresis: 8,
+        stickerHoldMinimum: 3.0,
+        stickerHoldMaximum: 5.0,
         calmUpperBound: 24,
         curiousUpperBound: 44,
         annoyedUpperBound: 69,
