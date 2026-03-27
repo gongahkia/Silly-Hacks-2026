@@ -151,6 +151,34 @@ final class PresentationBehaviorTests: XCTestCase {
         XCTAssertGreaterThan(bottomColor.blue, bottomColor.red, "Expected the bottom of the rendered sticker to remain blue")
     }
 
+    func testOverlayFrameAppliesManualDragOffset() {
+        let frame = OverlayFrameCalculator.frame(
+            windowFrame: CGRect(x: 100, y: 200, width: 800, height: 600),
+            overlaySize: CGSize(width: 120, height: 140),
+            baseOffset: CGSize(width: 80, height: 14),
+            userOffset: CGSize(width: 160, height: -90),
+            padding: 14,
+            screenFrame: CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        )
+
+        XCTAssertEqual(frame.origin.x, 340)
+        XCTAssertEqual(frame.origin.y, 640)
+    }
+
+    func testOverlayFrameClampsDraggedPositionInsideScreenBounds() {
+        let frame = OverlayFrameCalculator.frame(
+            windowFrame: CGRect(x: 100, y: 200, width: 800, height: 600),
+            overlaySize: CGSize(width: 120, height: 140),
+            baseOffset: CGSize(width: 80, height: 14),
+            userOffset: CGSize(width: -400, height: -900),
+            padding: 14,
+            screenFrame: CGRect(x: 0, y: 0, width: 500, height: 400)
+        )
+
+        XCTAssertEqual(frame.origin.x, 14)
+        XCTAssertEqual(frame.origin.y, 14)
+    }
+
     private func makePresentation(
         emotion: CompanionState,
         activity: SessionActivityState,

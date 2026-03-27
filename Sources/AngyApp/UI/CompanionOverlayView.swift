@@ -16,7 +16,10 @@ final class CompanionOverlayView: NSView {
     private var currentStickerSize: NSSize
     private var currentContentSize: NSSize
     private var currentEffectPhase: OverlayEffectPhase = .alive
+    private var dragStartOrigin: CGPoint?
+    private var dragStartCursorLocation: CGPoint?
     private let debugMonitor = DebugMonitor.shared
+    var onDrag: ((CGPoint) -> Void)?
     var onSizeChange: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
@@ -43,8 +46,16 @@ final class CompanionOverlayView: NSView {
         currentContentSize
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     var overlaySize: CGSize {
         currentContentSize
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
     }
 
     override func layout() {
@@ -69,6 +80,36 @@ final class CompanionOverlayView: NSView {
         rageMeterView.update(score: presentation.angerScore)
         loadStickerIfNeeded(named: presentation.stickerName)
         applyEffectPhase(presentation.effectPhase)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        dragStartOrigin = window.frame.origin
+        dragStartCursorLocation = window.convertPoint(toScreen: event.locationInWindow)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let dragStartOrigin, let dragStartCursorLocation, let window else {
+            super.mouseDragged(with: event)
+            return
+        }
+
+        let currentCursorLocation = window.convertPoint(toScreen: event.locationInWindow)
+        let draggedOrigin = CGPoint(
+            x: dragStartOrigin.x + (currentCursorLocation.x - dragStartCursorLocation.x),
+            y: dragStartOrigin.y + (currentCursorLocation.y - dragStartCursorLocation.y)
+        )
+        onDrag?(draggedOrigin)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        mouseDragged(with: event)
+        dragStartOrigin = nil
+        dragStartCursorLocation = nil
     }
 
     private func loadStickerIfNeeded(named stickerName: String) {
