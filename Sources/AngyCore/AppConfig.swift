@@ -61,8 +61,8 @@ public struct AppConfig: Sendable, Equatable {
 
 public extension AppConfig {
     static let live = AppConfig(
-        targetBundleIDs: ["com.openai.codex", "com.mitchellh.ghostty"],
-        targetOwnerNames: ["Codex", "Ghostty", "ghostty"],
+        targetBundleIDs: ["com.openai.codex", "com.mitchellh.ghostty", "com.cmuxterm.app"],
+        targetOwnerNames: ["Codex", "Ghostty", "ghostty", "cmux", "Cmux"],
         overlayRefreshInterval: 1.0 / 60.0,
         textRefreshInterval: 1.0,
         rollingWindowDuration: 20.0,

@@ -2,7 +2,7 @@
 
 ![Angy mascot](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRb70TVbvcjEU8LZAsWyVCsrFZO2thUTz-zRw&s)
 
-Angy is a local macOS companion that watches the frontmost Codex or Ghostty window and hangs a tiny ASCII panda just outside the frame. It uses Accessibility text first, falls back to OCR, runs lightweight sentiment analysis with Apple `NaturalLanguage`, and reacts with escalating poses and quips when the session looks rough.
+Angy is a local macOS companion that watches the frontmost Codex, Ghostty, or cmux window and hangs a tiny ASCII panda just outside the frame. It uses Accessibility text first, falls back to OCR, runs lightweight sentiment analysis with Apple `NaturalLanguage`, and reacts with escalating poses and quips when the session looks rough.
 
 ## Mascot
 
@@ -11,7 +11,7 @@ The official Angy mascot is the tiny back-turned panda. The in-app companion is 
 ## What ships in this MVP
 
 - Background macOS app with no normal Dock window
-- Transparent click-through overlay pinned to the active Codex or Ghostty window
+- Transparent click-through overlay pinned to the active Codex, Ghostty, or cmux window
 - Hybrid text extraction: Accessibility first, OCR fallback
 - Local sentiment scoring plus coding-specific frustration heuristics
 - Four companion states: `calm`, `curious`, `annoyed`, `furious`
@@ -38,7 +38,7 @@ swift test
 
 ## Notes
 
-- `Codex` and `Ghostty` are targeted via bundle ids `com.openai.codex` and `com.mitchellh.ghostty`.
+- `Codex`, `Ghostty`, and `cmux` are targeted via bundle ids `com.openai.codex`, `com.mitchellh.ghostty`, and `com.cmuxterm.app`.
 - The overlay hides whenever neither app is frontmost.
 - This package is structured as `AngyCore` for testable analysis/state logic and `AngyApp` for the macOS UI and OS integrations.
 - Overlay sticker assets can be resolved from the repo root, `overlay-assets/`, or `gif/`, but the primary source asset now lives at `overlay-assets/default.webm`.
