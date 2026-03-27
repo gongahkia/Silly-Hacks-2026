@@ -1,5 +1,7 @@
 import Foundation
 
+/// Maintains a time-bounded stream of visible window text and exposes a
+/// deduplicated transcript for downstream sentiment and activity analysis.
 public final class RollingTextBuffer {
     private let windowDuration: TimeInterval
 
@@ -24,6 +26,8 @@ public final class RollingTextBuffer {
         observations.removeAll()
     }
 
+    /// Returns recent visible text as a rolling transcript, keeping only the
+    /// first occurrence of each normalized line within the active window.
     public func recentTranscript(now: Date = Date()) -> String {
         prune(now: now)
 

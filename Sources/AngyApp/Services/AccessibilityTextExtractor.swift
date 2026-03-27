@@ -7,7 +7,11 @@ final class AccessibilityTextExtractor {
     private let maxDepth = 6
     private let maxNodes = 450
 
-    func extractText(forBundleIdentifier bundleIdentifier: String, appName: String) -> String? {
+    func extractText(
+        forBundleIdentifier bundleIdentifier: String,
+        appName: String,
+        windowTitle: String? = nil
+    ) -> String? {
         guard AXIsProcessTrusted() else {
             return nil
         }
@@ -27,6 +31,35 @@ final class AccessibilityTextExtractor {
         collectText(from: windowElement, depth: 0, remainingBudget: &remainingBudget, collected: &collected)
 
         let joined = collected.joined(separator: "\n")
+        return Self.sanitizedExtractedText(from: joined, windowTitle: windowTitle)
+    }
+
+    static func sanitizedExtractedText(from rawText: String, windowTitle: String?) -> String? {
+        let lines = TextNormalizer.splitLines(in: rawText)
+        guard !lines.isEmpty else {
+            return nil
+        }
+
+        let chromeCandidates = chromeTitleCandidates(from: windowTitle)
+        var seen = Set<String>()
+        let filteredLines = lines.filter { line in
+            let normalized = TextNormalizer.normalizeLine(line)
+            guard !normalized.isEmpty else {
+                return false
+            }
+
+            guard !isLikelyWindowChrome(normalizedLine: normalized, chromeCandidates: chromeCandidates) else {
+                return false
+            }
+
+            guard !isLikelyAccessibilityBoilerplate(normalizedLine: normalized) else {
+                return false
+            }
+
+            return seen.insert(normalized).inserted
+        }
+
+        let joined = filteredLines.joined(separator: "\n")
         let normalized = TextNormalizer.normalize(joined)
         return normalized.isEmpty ? nil : joined
     }
@@ -45,9 +78,7 @@ final class AccessibilityTextExtractor {
 
         let stringAttributes: [CFString] = [
             kAXTitleAttribute as CFString,
-            kAXValueAttribute as CFString,
-            kAXDescriptionAttribute as CFString,
-            kAXHelpAttribute as CFString
+            kAXValueAttribute as CFString
         ]
 
         for attribute in stringAttributes {
@@ -116,5 +147,62 @@ final class AccessibilityTextExtractor {
             }
             return unsafeBitCast(child as CFTypeRef, to: AXUIElement.self)
         }
+    }
+
+    private static func chromeTitleCandidates(from windowTitle: String?) -> Set<String> {
+        guard let windowTitle else {
+            return []
+        }
+
+        let normalizedTitle = TextNormalizer.normalizeLine(windowTitle)
+        guard !normalizedTitle.isEmpty else {
+            return []
+        }
+
+        var candidates: Set<String> = [normalizedTitle]
+
+        let separators = [",", " - ", " — ", " – ", " · "]
+        for separator in separators {
+            if let range = normalizedTitle.range(of: separator) {
+                let prefix = String(normalizedTitle[..<range.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if prefix.count >= 4 {
+                    candidates.insert(prefix)
+                }
+            }
+        }
+
+        return candidates
+    }
+
+    private static func isLikelyWindowChrome(
+        normalizedLine: String,
+        chromeCandidates: Set<String>
+    ) -> Bool {
+        for candidate in chromeCandidates {
+            if normalizedLine == candidate {
+                return true
+            }
+
+            if normalizedLine.count >= 8 && candidate.contains(normalizedLine) {
+                return true
+            }
+
+            if candidate.count >= 8 && normalizedLine.contains(candidate) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private static func isLikelyAccessibilityBoilerplate(normalizedLine: String) -> Bool {
+        let boilerplatePhrases = [
+            "activate to focus this workspace",
+            "drag to reorder",
+            "move up and move down actions"
+        ]
+
+        return boilerplatePhrases.contains { normalizedLine.contains($0) }
     }
 }

@@ -36,9 +36,11 @@ final class AngyController: NSObject {
     private var activeQuip: String?
     private var activeStickerName: String?
     private var lastQuipDate: Date?
-    private var nextStickerChangeDate: Date?
     private var explosionMonitor: ExplosionMonitor
     private var presentationState: OverlayPresentationState
+    private var lastAnalysisSource = "startup"
+    private var lastStickerCause = "initial"
+    private var lastTriggers: [String] = []
 
     init(config: AppConfig) {
         let defaultSticker = CompanionPersona.defaultSticker(for: .calm, activity: .default)
@@ -174,6 +176,9 @@ final class AngyController: NSObject {
                 companionState = result.currentState
                 activityState = .default
                 activeQuip = nil
+                lastAnalysisSource = "idle"
+                lastStickerCause = "idle"
+                lastTriggers = []
                 rebuildPresentationState()
             }
             return
@@ -249,7 +254,9 @@ final class AngyController: NSObject {
             sentimentResult: result,
             config: config
         )
-        updateStickerIfNeeded(
+        lastAnalysisSource = extraction.reason
+        lastTriggers = result.matchedTriggers
+        lastStickerCause = updateStickerIfNeeded(
             matchedTriggers: result.matchedTriggers,
             previousState: previousState,
             currentState: result.currentState,
@@ -344,18 +351,17 @@ final class AngyController: NSObject {
         currentState: CompanionState,
         previousActivity: SessionActivityState,
         currentActivity: SessionActivityState
-    ) {
+    ) -> String {
         guard overlayEffectPhase == .alive else {
-            return
+            return "effect-\(overlayEffectPhase.rawValue)"
         }
 
-        let now = Date()
+        let hadSticker = activeStickerName != nil
         let stateChanged = previousState != currentState
         let activityChanged = previousActivity != currentActivity
-        let canRotateSticker = nextStickerChangeDate.map { now >= $0 } ?? true
 
-        guard activeStickerName == nil || stateChanged || activityChanged || canRotateSticker else {
-            return
+        guard !hadSticker || stateChanged || activityChanged else {
+            return "hold"
         }
 
         activeStickerName = CompanionPersona.stickerName(
@@ -364,9 +370,21 @@ final class AngyController: NSObject {
             triggers: matchedTriggers,
             previousStickerName: activeStickerName
         )
-        nextStickerChangeDate = now.addingTimeInterval(
-            Double.random(in: config.stickerHoldMinimum...config.stickerHoldMaximum)
-        )
+
+        if !hadSticker {
+            return "initial"
+        }
+
+        switch (stateChanged, activityChanged) {
+        case (true, true):
+            return "state+activity"
+        case (true, false):
+            return "state-changed"
+        case (false, true):
+            return "activity-changed"
+        default:
+            return "selected"
+        }
     }
 
     private func scheduleStickerWarmup() {
@@ -427,13 +445,26 @@ final class AngyController: NSObject {
         )
         activeStickerName = stickerName
 
+        let debugInfo = debugMonitor.isEnabledForUI
+            ? OverlayDebugInfoBuilder.build(
+                analysisSource: lastAnalysisSource,
+                emotion: companionState,
+                activity: activityState,
+                angerScore: angerScore,
+                stickerName: stickerName,
+                stickerCause: lastStickerCause,
+                triggers: lastTriggers
+            )
+            : nil
+
         presentationState = OverlayPresentationState(
             emotion: companionState,
             activity: activityState,
             angerScore: angerScore,
             stickerName: stickerName,
             quip: overlayEffectPhase == .alive ? activeQuip : nil,
-            effectPhase: overlayEffectPhase
+            effectPhase: overlayEffectPhase,
+            debugInfo: debugInfo
         )
     }
 
@@ -454,6 +485,7 @@ final class AngyController: NSObject {
         explosionMonitor.resetTracking()
         overlayEffectPhase = .exploding
         activeQuip = nil
+        lastStickerCause = "effect-exploding"
         rebuildPresentationState()
 
         playSoundEvents(
@@ -503,6 +535,7 @@ final class AngyController: NSObject {
         }
 
         overlayEffectPhase = .tombstone
+        lastStickerCause = "effect-tombstone"
         rebuildPresentationState()
 
         if let trackedWindow {
@@ -517,7 +550,9 @@ final class AngyController: NSObject {
         activityState = .default
         activeQuip = nil
         lastQuipDate = nil
-        nextStickerChangeDate = nil
+        lastAnalysisSource = "cooldown"
+        lastStickerCause = "reset"
+        lastTriggers = []
         activeStickerName = CompanionPersona.defaultSticker(for: .calm, activity: .default)
         textBuffer.clear()
         explosionMonitor.startCooldown(now: Date())
@@ -568,7 +603,8 @@ private actor SessionAnalysisWorker {
         if permissions.accessibility,
            let rawText = accessibilityExtractor.extractText(
                 forBundleIdentifier: window.bundleID,
-                appName: window.appName
+                appName: window.appName,
+                windowTitle: window.title
            ),
            rawText.count >= minimumMeaningfulTextLength {
             return SessionObservationExtraction(

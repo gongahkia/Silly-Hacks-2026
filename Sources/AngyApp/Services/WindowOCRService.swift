@@ -39,7 +39,7 @@ final class WindowOCRService {
             return (candidate.string, candidate.confidence)
         }
 
-        let rawText = recognized.map { $0.0 }.joined(separator: "\n")
+        let rawText = Self.sanitizedRecognizedText(from: recognized.map { $0.0 })
         let normalizedText = TextNormalizer.normalize(rawText)
 
         guard !normalizedText.isEmpty else {
@@ -57,5 +57,47 @@ final class WindowOCRService {
             normalizedText: normalizedText,
             confidence: confidence
         )
+    }
+
+    static func sanitizedRecognizedText(from lines: [String]) -> String {
+        var seen = Set<String>()
+
+        return lines
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { line in
+                let normalized = TextNormalizer.normalizeLine(line)
+                guard !normalized.isEmpty else {
+                    return false
+                }
+
+                guard !isLikelyAngySelfNoise(normalizedLine: normalized) else {
+                    return false
+                }
+
+                return seen.insert(normalized).inserted
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func isLikelyAngySelfNoise(normalizedLine: String) -> Bool {
+        let line = normalizedLine.lowercased()
+
+        let fragments = [
+            "[angy",
+            "angy_debug",
+            "swift run angy",
+            ".build/debug/angy",
+            "build of product 'angy' complete",
+            "planning build",
+            "building for debugging",
+            "emitting module angy",
+            "linking angy",
+            "applying angy",
+            "debug logging enabled",
+            "ascii panda + hamster sidecar mode active"
+        ]
+
+        return fragments.contains { line.contains($0) }
     }
 }
