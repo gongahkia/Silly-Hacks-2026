@@ -6,6 +6,13 @@ import XCTest
 final class StickerVideoPipelineTests: XCTestCase {
     func testOverlayAssetsDefaultWebMCanRenderAnimatedASCIISequence() async throws {
         _ = NSApplication.shared
+        setenv(
+            "ANGY_OVERLAY_ASSETS",
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+                .appendingPathComponent("overlay-assets", isDirectory: true)
+                .path,
+            1
+        )
 
         guard WebVideoStickerDecoder.isFFmpegAvailable else {
             throw XCTSkip("ffmpeg is not installed; WebKit on this machine does not load the local WebM")

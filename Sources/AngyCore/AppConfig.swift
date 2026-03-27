@@ -15,6 +15,11 @@ public struct AppConfig: Sendable, Equatable {
     public var hysteresis: Double
     public var stickerHoldMinimum: TimeInterval
     public var stickerHoldMaximum: TimeInterval
+    public var soundEnabled: Bool
+    public var explosionThreshold: Double
+    public var explosionHoldDuration: TimeInterval
+    public var tombstoneDuration: TimeInterval
+    public var explosionCooldown: TimeInterval
     public var calmUpperBound: Double
     public var curiousUpperBound: Double
     public var annoyedUpperBound: Double
@@ -34,6 +39,11 @@ public struct AppConfig: Sendable, Equatable {
         hysteresis: Double,
         stickerHoldMinimum: TimeInterval,
         stickerHoldMaximum: TimeInterval,
+        soundEnabled: Bool,
+        explosionThreshold: Double,
+        explosionHoldDuration: TimeInterval,
+        tombstoneDuration: TimeInterval,
+        explosionCooldown: TimeInterval,
         calmUpperBound: Double,
         curiousUpperBound: Double,
         annoyedUpperBound: Double,
@@ -52,6 +62,11 @@ public struct AppConfig: Sendable, Equatable {
         self.hysteresis = hysteresis
         self.stickerHoldMinimum = stickerHoldMinimum
         self.stickerHoldMaximum = stickerHoldMaximum
+        self.soundEnabled = soundEnabled
+        self.explosionThreshold = explosionThreshold
+        self.explosionHoldDuration = explosionHoldDuration
+        self.tombstoneDuration = tombstoneDuration
+        self.explosionCooldown = explosionCooldown
         self.calmUpperBound = calmUpperBound
         self.curiousUpperBound = curiousUpperBound
         self.annoyedUpperBound = annoyedUpperBound
@@ -74,6 +89,11 @@ public extension AppConfig {
         hysteresis: 8,
         stickerHoldMinimum: 3.0,
         stickerHoldMaximum: 5.0,
+        soundEnabled: true,
+        explosionThreshold: 95,
+        explosionHoldDuration: 3.0,
+        tombstoneDuration: 3.0,
+        explosionCooldown: 20.0,
         calmUpperBound: 24,
         curiousUpperBound: 44,
         annoyedUpperBound: 69,

@@ -54,6 +54,10 @@ public struct SentimentEngine: Sendable {
                 heuristicAdjustment: 0,
                 finalAngerScore: decayedScore,
                 matchedTriggers: [],
+                positiveTriggers: [],
+                negativeTriggers: [],
+                frustrationTriggers: [],
+                repeatedNegativeLines: [:],
                 currentState: mapState(for: decayedScore, previousState: previousState)
             )
         }
@@ -73,6 +77,10 @@ public struct SentimentEngine: Sendable {
             heuristicAdjustment: heuristic.adjustment,
             finalAngerScore: smoothedScore,
             matchedTriggers: heuristic.matches,
+            positiveTriggers: heuristic.positiveTriggers,
+            negativeTriggers: heuristic.negativeTriggers,
+            frustrationTriggers: heuristic.frustrationTriggers,
+            repeatedNegativeLines: heuristic.repeatedNegativeLines,
             currentState: mapState(for: smoothedScore, previousState: previousState)
         )
     }
@@ -160,26 +168,39 @@ public struct SentimentEngine: Sendable {
     private func heuristicAdjustment(
         from text: String,
         observations: [TextObservation]
-    ) -> (adjustment: Double, matches: [String]) {
+    ) -> (
+        adjustment: Double,
+        matches: [String],
+        positiveTriggers: [String],
+        negativeTriggers: [String],
+        frustrationTriggers: [String],
+        repeatedNegativeLines: [String: Int]
+    ) {
         let normalized = TextNormalizer.normalize(text)
         let tokens = TextNormalizer.tokens(in: normalized)
         var adjustment = 0.0
         var matches: [String] = []
+        var positiveTriggers: [String] = []
+        var negativeTriggers: [String] = []
+        var frustrationTriggers: [String] = []
 
         for token in tokens {
             if let weight = negativeTokenWeights[token] {
                 adjustment += weight
                 matches.append(token)
+                negativeTriggers.append(token)
             }
 
             if let weight = frustrationTokenWeights[token] {
                 adjustment += weight
                 matches.append(token)
+                frustrationTriggers.append(token)
             }
 
             if let weight = positiveTokenWeights[token] {
                 adjustment += weight
                 matches.append(token)
+                positiveTriggers.append(token)
             }
         }
 
@@ -196,7 +217,14 @@ public struct SentimentEngine: Sendable {
             matches.append(contentsOf: repeatedLineCounts.keys.map { "repeat:\($0)" })
         }
 
-        return (adjustment, matches.sorted())
+        return (
+            adjustment,
+            uniqueSorted(matches),
+            uniqueSorted(positiveTriggers),
+            uniqueSorted(negativeTriggers),
+            uniqueSorted(frustrationTriggers),
+            repeatedLineCounts
+        )
     }
 
     private func repeatedNegativeLineCounts(in observations: [TextObservation]) -> [String: Int] {
@@ -250,5 +278,9 @@ public struct SentimentEngine: Sendable {
 
     private func clamp(_ value: Double) -> Double {
         min(100, max(0, value))
+    }
+
+    private func uniqueSorted(_ values: [String]) -> [String] {
+        Array(Set(values)).sorted()
     }
 }

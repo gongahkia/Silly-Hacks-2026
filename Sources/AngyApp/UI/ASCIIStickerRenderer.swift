@@ -34,7 +34,7 @@ actor ASCIIStickerRenderer {
     private let alphaThreshold: UInt8 = 8
     private let backgroundLuminanceThreshold: UInt8 = 72
     private let backgroundColorTolerance: Int = 44
-    private let pipelineVersion = 6
+    private let pipelineVersion = 7
     private let fileManager = FileManager.default
     private let debugEnabled = ProcessInfo.processInfo.environment["ANGY_DEBUG"] == "1"
     private var memoryCache: [String: RenderedASCIIStickerSequence] = [:]
@@ -498,8 +498,6 @@ actor ASCIIStickerRenderer {
                 return false
             }
 
-            context.translateBy(x: 0, y: CGFloat(height))
-            context.scaleBy(x: 1, y: -1)
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
@@ -694,6 +692,7 @@ private struct PreparedStickerFrame {
 final class ASCIIStickerView: NSView {
     private let imageLayer = CALayer()
     private let animationKey = "sticker-frame-animation"
+    private let explosionAnimationKey = "sticker-explosion"
     private var renderedSequence: RenderedASCIIStickerSequence?
 
     override var isFlipped: Bool {
@@ -749,6 +748,47 @@ final class ASCIIStickerView: NSView {
         invalidateIntrinsicContentSize()
         needsLayout = true
         updateLayerContents()
+    }
+
+    func playExplosionAnimation(duration: TimeInterval) {
+        guard let layer else {
+            return
+        }
+
+        layer.removeAnimation(forKey: explosionAnimationKey)
+
+        let shake = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        shake.values = [0, -10, 10, -8, 8, -5, 5, 0]
+        shake.keyTimes = [0, 0.12, 0.24, 0.38, 0.52, 0.68, 0.84, 1]
+
+        let scale = CAKeyframeAnimation(keyPath: "transform.scale")
+        scale.values = [1, 1.10, 1.22, 0.92, 0.30]
+        scale.keyTimes = [0, 0.24, 0.42, 0.74, 1]
+
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0.85, 0.25, 0]
+        fade.keyTimes = [0, 0.35, 0.58, 0.82, 1]
+
+        let group = CAAnimationGroup()
+        group.animations = [shake, scale, fade]
+        group.duration = duration
+        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        group.isRemovedOnCompletion = false
+        group.fillMode = .forwards
+        layer.add(group, forKey: explosionAnimationKey)
+    }
+
+    func resetVisualEffects() {
+        guard let layer else {
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.removeAnimation(forKey: explosionAnimationKey)
+        layer.opacity = 1
+        layer.transform = CATransform3DIdentity
+        CATransaction.commit()
     }
 
     private func updateLayerContents() {

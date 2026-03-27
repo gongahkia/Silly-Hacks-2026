@@ -8,7 +8,7 @@ final class CompanionOverlayController {
     private let panel: CompanionOverlayPanel
     private let contentView: CompanionOverlayView
     private var lastPresentedWindow: TrackedWindow?
-    private var lastStickerName: String?
+    private var lastPresentation: OverlayPresentationState?
     private var cachedOverlaySize = NSSize(width: 120, height: 120)
 
     init(config: AppConfig) {
@@ -23,11 +23,11 @@ final class CompanionOverlayController {
         self.cachedOverlaySize = contentView.overlaySize
     }
 
-    func present(window: TrackedWindow, state _: CompanionState, stickerName: String, quip _: String?) {
+    func present(window: TrackedWindow, presentation: OverlayPresentationState) {
         lastPresentedWindow = window
-        if lastStickerName != stickerName {
-            lastStickerName = stickerName
-            contentView.update(stickerName: stickerName)
+        if lastPresentation != presentation {
+            lastPresentation = presentation
+            contentView.update(presentation: presentation)
         }
         refreshPanelFrame()
     }
@@ -91,10 +91,11 @@ private final class CompanionOverlayPanel: NSPanel {
         isReleasedWhenClosed = false
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false
+        hasShadow = true
         ignoresMouseEvents = true
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        animationBehavior = .none
     }
 
     override var canBecomeKey: Bool { false }

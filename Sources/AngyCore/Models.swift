@@ -63,11 +63,23 @@ public enum CompanionState: String, Sendable, CaseIterable {
     case furious
 }
 
+public enum SessionActivityState: String, Sendable, CaseIterable {
+    case `default`
+    case reading
+    case thinking
+    case blocked
+    case celebrating
+}
+
 public struct SentimentResult: Sendable, Equatable {
     public var baseSentimentScore: Double
     public var heuristicAdjustment: Double
     public var finalAngerScore: Double
     public var matchedTriggers: [String]
+    public var positiveTriggers: [String]
+    public var negativeTriggers: [String]
+    public var frustrationTriggers: [String]
+    public var repeatedNegativeLines: [String: Int]
     public var currentState: CompanionState
 
     public init(
@@ -75,12 +87,20 @@ public struct SentimentResult: Sendable, Equatable {
         heuristicAdjustment: Double,
         finalAngerScore: Double,
         matchedTriggers: [String],
+        positiveTriggers: [String],
+        negativeTriggers: [String],
+        frustrationTriggers: [String],
+        repeatedNegativeLines: [String: Int],
         currentState: CompanionState
     ) {
         self.baseSentimentScore = baseSentimentScore
         self.heuristicAdjustment = heuristicAdjustment
         self.finalAngerScore = finalAngerScore
         self.matchedTriggers = matchedTriggers
+        self.positiveTriggers = positiveTriggers
+        self.negativeTriggers = negativeTriggers
+        self.frustrationTriggers = frustrationTriggers
+        self.repeatedNegativeLines = repeatedNegativeLines
         self.currentState = currentState
     }
 }

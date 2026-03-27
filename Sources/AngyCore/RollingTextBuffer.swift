@@ -20,6 +20,10 @@ public final class RollingTextBuffer {
         observations.removeAll { $0.timestamp < cutoff }
     }
 
+    public func clear() {
+        observations.removeAll()
+    }
+
     public func recentTranscript(now: Date = Date()) -> String {
         prune(now: now)
 
