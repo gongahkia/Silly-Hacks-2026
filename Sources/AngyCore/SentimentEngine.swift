@@ -94,6 +94,10 @@ public struct SentimentEngine: Sendable {
     }
 
     private func sentimentScore(for text: String) -> Double {
+        guard #available(macOS 10.15, *) else {
+            return lexicalSentimentFallback(for: text)
+        }
+
         let tagger = NLTagger(tagSchemes: [.sentimentScore])
         tagger.string = text
 
@@ -111,18 +115,46 @@ public struct SentimentEngine: Sendable {
             return true
         }
 
+        let (fallbackTag, _) = tagger.tag(
+            at: text.startIndex,
+            unit: .paragraph,
+            scheme: .sentimentScore
+        )
+
         if scores.isEmpty,
-           let (tag, _) = tagger.tag(
-                at: text.startIndex,
-                unit: .paragraph,
-                scheme: .sentimentScore
-           ),
-           let score = Double(tag.rawValue) {
+           let fallbackTag,
+           let score = Double(fallbackTag.rawValue) {
             scores.append(score)
         }
 
-        guard !scores.isEmpty else { return 0 }
+        guard !scores.isEmpty else {
+            return lexicalSentimentFallback(for: text)
+        }
         return scores.reduce(0, +) / Double(scores.count)
+    }
+
+    private func lexicalSentimentFallback(for text: String) -> Double {
+        let tokens = TextNormalizer.tokens(in: text)
+        guard !tokens.isEmpty else { return 0 }
+
+        var score = 0.0
+
+        for token in tokens {
+            if let weight = positiveTokenWeights[token] {
+                score += abs(weight)
+            }
+
+            if let weight = negativeTokenWeights[token] {
+                score -= weight
+            }
+
+            if let weight = frustrationTokenWeights[token] {
+                score -= weight * 0.75
+            }
+        }
+
+        let normalizedScore = score / Double(max(tokens.count, 1))
+        return max(-1, min(1, normalizedScore / 6))
     }
 
     private func heuristicAdjustment(

@@ -4,7 +4,7 @@ import Foundation
 import Vision
 
 final class WindowOCRService {
-    func extractText(for window: TrackedWindow) -> TextObservation? {
+    func extractText(for window: TrackedWindow) -> AngyCore.TextObservation? {
         guard window.windowID != 0 else {
             return nil
         }
@@ -50,7 +50,7 @@ final class WindowOCRService {
             ? 0
             : Double(recognized.map { $0.1 }.reduce(Float.zero, +)) / Double(recognized.count)
 
-        return TextObservation(
+        return AngyCore.TextObservation(
             timestamp: Date(),
             source: .ocr,
             rawText: rawText,
