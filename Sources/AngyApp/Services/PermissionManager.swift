@@ -3,7 +3,7 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-struct PermissionStatus: Equatable {
+struct PermissionStatus: Equatable, Sendable {
     let accessibility: Bool
     let screenRecording: Bool
 }

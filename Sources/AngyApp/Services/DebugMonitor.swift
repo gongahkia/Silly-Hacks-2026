@@ -67,7 +67,14 @@ final class DebugMonitor {
         let characters = observation?.rawText.count ?? 0
         let confidence = observation.map { String(format: "%.2f", $0.confidence) } ?? "-"
         let score = String(format: "%.1f", angerScore)
-        let triggerSummary = triggers.isEmpty ? "-" : triggers.joined(separator: ",")
+        let triggerSummary: String
+        if triggers.isEmpty {
+            triggerSummary = "-"
+        } else {
+            let uniqueTriggers = Array(NSOrderedSet(array: triggers)) as? [String] ?? triggers
+            let preview = uniqueTriggers.prefix(5).joined(separator: ",")
+            triggerSummary = "\(preview) total=\(triggers.count)"
+        }
         let quipSummary = quip ?? "-"
         let stickerSummary = stickerName ?? "-"
 

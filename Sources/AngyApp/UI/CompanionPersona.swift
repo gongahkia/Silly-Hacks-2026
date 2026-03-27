@@ -1,5 +1,4 @@
 import AngyCore
-import AppKit
 import Foundation
 
 enum CompanionPersona {
@@ -109,14 +108,8 @@ enum CompanionPersona {
         return pool[(currentIndex + 1) % pool.count]
     }
 
-    static func image(for stickerName: String) -> NSImage? {
-        let bundle = Bundle.module
-        let directURL = bundle.url(forResource: stickerName, withExtension: "png")
-        let nestedURL = bundle.url(forResource: stickerName, withExtension: "png", subdirectory: "Stickers")
-        let url = directURL ?? nestedURL
-
-        guard let url else { return nil }
-        return NSImage(contentsOf: url)
+    static func assetSource(for stickerName: String) -> StickerAssetSource? {
+        StickerAssetCatalog.asset(named: stickerName)
     }
 
     private static func preferredSticker(for state: CompanionState, triggers: [String]) -> String {

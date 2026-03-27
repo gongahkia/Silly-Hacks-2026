@@ -3,14 +3,16 @@ import Foundation
 
 @MainActor
 final class CompanionOverlayView: NSView {
-    private let asciiLabel = NSTextField(labelWithString: "")
-    private let stickerView = NSImageView(frame: .zero)
-    private let quipContainer = NSView(frame: .zero)
-    private let quipLabel = NSTextField(labelWithString: "")
-    private var currentStickerName: String?
+    private let placeholderSize = NSSize(width: 120, height: 120)
+    private let stickerView = ASCIIStickerView(frame: .zero)
+    private var currentStickerAssetKey: String?
+    private var stickerLoadTask: Task<Void, Never>?
+    private var currentContentSize: NSSize
     private let debugMonitor = DebugMonitor.shared
+    var onSizeChange: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
+        currentContentSize = placeholderSize
         super.init(frame: frameRect)
         configureView()
     }
@@ -20,112 +22,80 @@ final class CompanionOverlayView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        stickerLoadTask?.cancel()
+    }
+
     override var fittingSize: NSSize {
-        let asciiSize = asciiLabel.sizeThatFits(width: 160)
-        let topRowWidth = asciiSize.width + (stickerView.isHidden ? 0 : 72 + 12)
-        let topRowHeight = max(asciiSize.height, stickerView.isHidden ? 0 : 72)
-        let quipSize = quipLabel.stringValue.isEmpty ? .zero : quipLabel.sizeThatFits(width: 220)
-        let width = max(topRowWidth, quipSize.width + 24)
-        let height = topRowHeight + (quipSize == .zero ? 0 : quipSize.height + 18)
-        return NSSize(width: max(120, width), height: max(74, height))
+        currentContentSize
+    }
+
+    var overlaySize: CGSize {
+        currentContentSize
     }
 
     override func layout() {
         super.layout()
 
-        let width = bounds.width
-        let stickerWidth: CGFloat = stickerView.isHidden ? 0 : 72
-        let asciiWidth = max(120, width - stickerWidth - (stickerView.isHidden ? 0 : 12))
-        let asciiSize = asciiLabel.sizeThatFits(width: asciiWidth)
-        let topRowHeight = max(asciiSize.height, stickerView.isHidden ? 0 : 72)
-        let quipSize = quipLabel.stringValue.isEmpty ? .zero : quipLabel.sizeThatFits(width: width - 24)
-        let topRowY = quipSize == .zero ? 0 : quipSize.height + 18
-
-        asciiLabel.frame = NSRect(
-            x: 0,
-            y: topRowY + (topRowHeight - asciiSize.height) / 2,
-            width: asciiWidth,
-            height: asciiSize.height
-        )
-
         stickerView.frame = NSRect(
-            x: asciiLabel.frame.maxX + (stickerView.isHidden ? 0 : 12),
-            y: topRowY + (topRowHeight - 72) / 2,
-            width: stickerWidth,
-            height: stickerWidth
+            x: 0,
+            y: 0,
+            width: currentContentSize.width,
+            height: currentContentSize.height
         )
-
-        if quipSize == .zero {
-            quipContainer.isHidden = true
-        } else {
-            quipContainer.isHidden = false
-            quipContainer.frame = NSRect(x: 0, y: 0, width: quipSize.width + 24, height: quipSize.height + 10)
-            quipLabel.frame = NSRect(x: 12, y: 5, width: quipSize.width, height: quipSize.height)
-        }
     }
 
-    func update(pose: String, stickerName: String, quip: String?) {
-        asciiLabel.stringValue = pose
-        if currentStickerName != stickerName || stickerView.image == nil {
-            let image = CompanionPersona.image(for: stickerName)
-            stickerView.image = image
-            stickerView.isHidden = image == nil
-            currentStickerName = stickerName
-            debugMonitor.recordStickerAsset(name: stickerName, loaded: image != nil, size: image?.size)
+    func update(stickerName: String) {
+        let assetSource = CompanionPersona.assetSource(for: stickerName)
+        let assetKey = assetSource?.cacheKey ?? "missing:\(stickerName)"
+
+        if currentStickerAssetKey != assetKey {
+            currentStickerAssetKey = assetKey
+            stickerLoadTask?.cancel()
+            stickerView.update(renderedSequence: nil)
+            updateContentSize(placeholderSize)
+
+            stickerLoadTask = Task { [weak self] in
+                guard let self else { return }
+                let renderedSequence = await ASCIIStickerRenderer.shared.renderSequence(from: assetSource)
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await MainActor.run {
+                    guard self.currentStickerAssetKey == assetKey else {
+                        return
+                    }
+
+                    self.stickerView.update(renderedSequence: renderedSequence)
+                    self.debugMonitor.recordStickerAsset(
+                        name: stickerName,
+                        loaded: renderedSequence != nil,
+                        size: renderedSequence?.sourceSize
+                    )
+                    self.updateContentSize(renderedSequence?.layoutSize ?? self.placeholderSize)
+                }
+            }
         }
-        quipLabel.stringValue = quip ?? ""
-        needsLayout = true
-        invalidateIntrinsicContentSize()
     }
 
     private func configureView() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        asciiLabel.font = NSFont(name: "Menlo-Bold", size: 18) ?? .monospacedSystemFont(ofSize: 18, weight: .bold)
-        asciiLabel.lineBreakMode = .byWordWrapping
-        asciiLabel.maximumNumberOfLines = 0
-        asciiLabel.alignment = .left
-        asciiLabel.backgroundColor = .clear
-        asciiLabel.textColor = NSColor.black.withAlphaComponent(0.92)
-        asciiLabel.translatesAutoresizingMaskIntoConstraints = false
-        asciiLabel.usesSingleLineMode = false
-        addSubview(asciiLabel)
-
-        stickerView.imageScaling = .scaleProportionallyUpOrDown
         stickerView.isHidden = true
-        if debugMonitor.isEnabledForUI {
-            stickerView.wantsLayer = true
-            stickerView.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.12).cgColor
-            stickerView.layer?.borderColor = NSColor.systemOrange.withAlphaComponent(0.55).cgColor
-            stickerView.layer?.borderWidth = 1
-            stickerView.layer?.cornerRadius = 10
-        }
         addSubview(stickerView)
-
-        quipContainer.wantsLayer = true
-        quipContainer.layer?.backgroundColor = NSColor(calibratedWhite: 1.0, alpha: 0.9).cgColor
-        quipContainer.layer?.cornerRadius = 12
-        quipContainer.layer?.borderWidth = 1
-        quipContainer.layer?.borderColor = NSColor.black.withAlphaComponent(0.14).cgColor
-        addSubview(quipContainer)
-
-        quipLabel.font = NSFont(name: "Menlo-Regular", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
-        quipLabel.textColor = NSColor.black.withAlphaComponent(0.9)
-        quipLabel.lineBreakMode = .byWordWrapping
-        quipLabel.maximumNumberOfLines = 2
-        quipLabel.backgroundColor = .clear
-        quipLabel.alignment = .left
-        quipContainer.addSubview(quipLabel)
     }
-}
 
-private extension NSTextField {
-    func sizeThatFits(width: CGFloat) -> CGSize {
-        let bounds = attributedStringValue.boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]
-        )
-        return CGSize(width: ceil(bounds.width), height: ceil(bounds.height))
+    private func updateContentSize(_ size: CGSize) {
+        let nextSize = NSSize(width: max(1, size.width), height: max(1, size.height))
+        guard currentContentSize != nextSize else {
+            return
+        }
+
+        currentContentSize = nextSize
+        needsLayout = true
+        invalidateIntrinsicContentSize()
+        onSizeChange?()
     }
 }

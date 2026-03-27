@@ -22,6 +22,11 @@ let package = Package(
         .testTarget(
             name: "AngyCoreTests",
             dependencies: ["AngyCore"]
+        ),
+        .testTarget(
+            name: "AngyAppTests",
+            dependencies: ["Angy"],
+            path: "Tests/AngyAppTests"
         )
     ]
 )

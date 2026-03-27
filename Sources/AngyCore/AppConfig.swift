@@ -61,12 +61,12 @@ public struct AppConfig: Sendable, Equatable {
 
 public extension AppConfig {
     static let live = AppConfig(
-        targetBundleIDs: ["com.openai.codex"],
-        targetOwnerNames: ["Codex"],
-        overlayRefreshInterval: 0.1,
+        targetBundleIDs: ["com.openai.codex", "com.mitchellh.ghostty"],
+        targetOwnerNames: ["Codex", "Ghostty", "ghostty"],
+        overlayRefreshInterval: 1.0 / 60.0,
         textRefreshInterval: 1.0,
         rollingWindowDuration: 20.0,
-        overlayOffset: CGSize(width: 18, height: 14),
+        overlayOffset: CGSize(width: 80, height: 14),
         overlayInsideFallbackPadding: 14,
         quipCooldown: 10.0,
         smoothingFactor: 0.78,
