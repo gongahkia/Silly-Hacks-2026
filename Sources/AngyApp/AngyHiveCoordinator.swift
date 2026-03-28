@@ -18,6 +18,8 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
     private var globalPauseAll = false
     private var hateMailEnabled = false
     private var statusMessage: String?
+    private var isStatusMenuOpen = false
+    private var needsStatusMenuRebuild = false
 
     init(config: AppConfig) {
         self.config = config
@@ -39,7 +41,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
         bindCallbacks(for: primaryController)
         primaryController.start()
         configureStatusItem()
-        rebuildStatusMenu()
+        requestStatusMenuRebuild()
         startControlPlaneServer()
     }
 
@@ -59,6 +61,18 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        isStatusMenuOpen = true
+        rebuildStatusMenu()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isStatusMenuOpen = false
+
+        guard needsStatusMenuRebuild else {
+            return
+        }
+
+        needsStatusMenuRebuild = false
         rebuildStatusMenu()
     }
 
@@ -103,7 +117,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
             for controller in spawnedControllers.values {
                 controller.pause()
             }
-            rebuildStatusMenu()
+            requestStatusMenuRebuild()
             return AngyControlResponse(ok: true, message: "Paused all Angys.", instances: instanceSnapshots(), settings: settingsSnapshot())
         case .resumeAll:
             globalPauseAll = false
@@ -111,7 +125,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
             for controller in spawnedControllers.values {
                 controller.resume()
             }
-            rebuildStatusMenu()
+            requestStatusMenuRebuild()
             return AngyControlResponse(ok: true, message: "Resumed all Angys.", instances: instanceSnapshots(), settings: settingsSnapshot())
         case .retargetInstance:
             guard let controller = resolveController(request: request), controller.role == .spawned else {
@@ -163,7 +177,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
                     enabled: hateMailEnabled
                 )
                 statusMessage = "Wrote hate mail to \(url.lastPathComponent)."
-                rebuildStatusMenu()
+                requestStatusMenuRebuild()
                 return AngyControlResponse(ok: true, message: "Wrote hate mail to \(url.path).")
             } catch {
                 return failure(error.localizedDescription)
@@ -199,8 +213,9 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
 
         statusMenu.removeAllItems()
 
+        let totalInstances = 1 + spawnedControllers.count
         let header = NSMenuItem(
-            title: "Angy • \(spawnedControllers.count) spawned • \(globalPauseAll ? "paused" : "running")",
+            title: "Angy • \(totalInstances) total • \(globalPauseAll ? "paused" : "running")",
             action: nil,
             keyEquivalent: ""
         )
@@ -267,6 +282,15 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
         let quitItem = NSMenuItem(title: "Quit", action: #selector(handleQuit(_:)), keyEquivalent: "")
         quitItem.target = self
         statusMenu.addItem(quitItem)
+    }
+
+    private func requestStatusMenuRebuild() {
+        if isStatusMenuOpen {
+            needsStatusMenuRebuild = true
+            return
+        }
+
+        rebuildStatusMenu()
     }
 
     private func instanceMenuItem(for snapshot: AngyInstanceSnapshot) -> NSMenuItem {
@@ -340,7 +364,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
 
     private func bindCallbacks(for controller: AngyInstanceController) {
         controller.onSnapshotChange = { [weak self] _ in
-            self?.rebuildStatusMenu()
+            self?.requestStatusMenuRebuild()
         }
         controller.onExplosion = { [weak self] snapshot in
             guard let self else {
@@ -356,14 +380,14 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
                     )
                     await MainActor.run {
                         self.statusMessage = "Angy \(snapshot.tag ?? "Primary") left hate mail."
-                        self.rebuildStatusMenu()
+                        self.requestStatusMenuRebuild()
                     }
                 } catch HateMailWriterError.featureDisabled, HateMailWriterError.coolingDown {
                     return
                 } catch {
                     await MainActor.run {
                         self.statusMessage = error.localizedDescription
-                        self.rebuildStatusMenu()
+                        self.requestStatusMenuRebuild()
                     }
                 }
             }
@@ -403,7 +427,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
 
         let snapshot = controller.snapshot()
         statusMessage = "Spawned \(displayName(for: snapshot))."
-        rebuildStatusMenu()
+        requestStatusMenuRebuild()
         return AngyControlResponse(ok: true, message: statusMessage, instances: instanceSnapshots())
     }
 
@@ -416,7 +440,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
         spawnedOrder.removeAll { $0 == id }
         recomputeSpawnedTags()
         statusMessage = "Removed \(controller.snapshot().tag ?? id.rawValue)."
-        rebuildStatusMenu()
+        requestStatusMenuRebuild()
     }
 
     private func recomputeSpawnedTags() {
@@ -518,7 +542,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
             if let message = response.message {
                 statusMessage = message
             }
-            rebuildStatusMenu()
+            requestStatusMenuRebuild()
         }
     }
 
@@ -539,7 +563,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
             controlPlaneServer = server
         } catch {
             statusMessage = error.localizedDescription
-            rebuildStatusMenu()
+            requestStatusMenuRebuild()
         }
     }
 
@@ -547,7 +571,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
         switch key {
         case "hateMailEnabled":
             hateMailEnabled = (value as NSString).boolValue
-            rebuildStatusMenu()
+            requestStatusMenuRebuild()
             return AngyControlResponse(ok: true, message: "Updated hateMailEnabled.", settings: settingsSnapshot())
         case "pauseAll":
             if (value as NSString).boolValue {
@@ -561,7 +585,7 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
 
     private func failure(_ message: String) -> AngyControlResponse {
         statusMessage = message
-        rebuildStatusMenu()
+        requestStatusMenuRebuild()
         return AngyControlResponse(ok: false, message: message)
     }
 }
