@@ -44,7 +44,7 @@ final class PermissionManager {
         alert.alertStyle = .informational
         alert.messageText = "Angy needs macOS permissions"
         alert.informativeText = """
-        Angy can only analyze the active Codex, Ghostty, or cmux window when the following permissions are enabled:
+        Angy can only analyze the active Codex or Ghostty window when the following permissions are enabled:
 
         • \(missingPermissions)
 

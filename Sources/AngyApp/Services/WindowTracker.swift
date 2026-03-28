@@ -98,16 +98,17 @@ final class WindowTracker: TrackedWindowSource {
     }
 
     private func currentFrontmostAppContext() -> ObservedAppContext? {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-              let bundleID = app.bundleIdentifier,
-              config.targetBundleIDs.contains(bundleID) else {
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
             return nil
         }
 
-        return ObservedAppContext(
-            bundleID: bundleID,
-            appName: app.localizedName ?? "Target App",
-            pid: app.processIdentifier
+        let runningApps = NSWorkspace.shared.runningApplications.map(RunningAppSnapshot.init)
+        let focusedWindowTitle = focusedWindowTitle(for: frontmostApp.processIdentifier)
+        return WindowTrackerAppSelector.selectObservedAppContext(
+            frontmostApp: RunningAppSnapshot(frontmostApp),
+            focusedWindowTitle: focusedWindowTitle,
+            runningApps: runningApps,
+            targetBundleIDs: config.targetBundleIDs
         )
     }
 
@@ -284,6 +285,35 @@ final class WindowTracker: TrackedWindowSource {
 
     private func setTrackingTimeoutIfPossible(for element: AXUIElement) {
         AXUIElementSetMessagingTimeout(element, trackingAXTimeout)
+    }
+
+    private func focusedWindowTitle(for pid: pid_t) -> String? {
+        guard AXIsProcessTrusted() else {
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(pid)
+        setTrackingTimeoutIfPossible(for: appElement)
+        guard let windowElement = copyAttributeElement(
+            from: appElement,
+            attribute: kAXFocusedWindowAttribute as CFString
+        ) else {
+            return nil
+        }
+
+        setTrackingTimeoutIfPossible(for: windowElement)
+
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            windowElement,
+            kAXTitleAttribute as CFString,
+            &value
+        )
+        guard result == .success else {
+            return nil
+        }
+
+        return value as? String
     }
 
     private static let accessibilityCallback: AXObserverCallback = { _, _, notification, refcon in
@@ -718,10 +748,89 @@ private struct FocusedWindowHints: Sendable {
     let isMinimized: Bool?
 }
 
-private struct ObservedAppContext: Sendable, Equatable {
+struct ObservedAppContext: Sendable, Equatable {
     let bundleID: String
     let appName: String
     let pid: pid_t
+}
+
+struct RunningAppSnapshot: Sendable, Equatable {
+    let bundleID: String?
+    let appName: String
+    let pid: pid_t
+    let isHidden: Bool
+
+    init(_ app: NSRunningApplication) {
+        bundleID = app.bundleIdentifier
+        appName = app.localizedName ?? "Target App"
+        pid = app.processIdentifier
+        isHidden = app.isHidden
+    }
+
+    init(bundleID: String?, appName: String, pid: pid_t, isHidden: Bool) {
+        self.bundleID = bundleID
+        self.appName = appName
+        self.pid = pid
+        self.isHidden = isHidden
+    }
+}
+
+enum WindowTrackerAppSelector {
+    private static let codexBundleID = "com.openai.codex"
+    private static let terminalBundleIDs: Set<String> = [
+        "com.mitchellh.ghostty"
+    ]
+    private static let angyLauncherFragments = [
+        "swift run angy",
+        "/angy",
+        ".build/debug/angy"
+    ]
+
+    static func selectObservedAppContext(
+        frontmostApp: RunningAppSnapshot,
+        focusedWindowTitle: String?,
+        runningApps: [RunningAppSnapshot],
+        targetBundleIDs: Set<String>
+    ) -> ObservedAppContext? {
+        guard let bundleID = frontmostApp.bundleID,
+              targetBundleIDs.contains(bundleID) else {
+            return nil
+        }
+
+        if terminalBundleIDs.contains(bundleID),
+           isLikelyAngyLauncher(title: focusedWindowTitle) {
+            if let codexApp = runningApps.first(where: { candidate in
+                candidate.bundleID == codexBundleID && !candidate.isHidden
+            }) {
+                return ObservedAppContext(
+                    bundleID: codexBundleID,
+                    appName: codexApp.appName,
+                    pid: codexApp.pid
+                )
+            }
+
+            return nil
+        }
+
+        return ObservedAppContext(
+            bundleID: bundleID,
+            appName: frontmostApp.appName,
+            pid: frontmostApp.pid
+        )
+    }
+
+    static func isLikelyAngyLauncher(title: String?) -> Bool {
+        let normalizedTitle = title?
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+            ?? ""
+
+        guard !normalizedTitle.isEmpty else {
+            return false
+        }
+
+        return angyLauncherFragments.contains { normalizedTitle.contains($0) }
+    }
 }
 
 private extension Array {

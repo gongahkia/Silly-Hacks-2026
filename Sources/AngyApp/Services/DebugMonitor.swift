@@ -67,6 +67,7 @@ final class DebugMonitor {
         let characters = observation?.rawText.count ?? 0
         let confidence = observation.map { String(format: "%.2f", $0.confidence) } ?? "-"
         let score = String(format: "%.1f", angerScore)
+        let preview = observation.map(previewText(from:)) ?? "-"
         let triggerSummary: String
         if triggers.isEmpty {
             triggerSummary = "-"
@@ -84,7 +85,7 @@ final class DebugMonitor {
         }
 
         log(
-            "analysis source=\(extraction) chars=\(characters) confidence=\(confidence) anger=\(score) state=\(state.rawValue) sticker=\(stickerSummary) triggers=\(triggerSummary) quip=\(quipSummary)"
+            "analysis source=\(extraction) chars=\(characters) confidence=\(confidence) anger=\(score) state=\(state.rawValue) sticker=\(stickerSummary) triggers=\(triggerSummary) preview=\(preview) quip=\(quipSummary)"
         )
     }
 
@@ -119,6 +120,27 @@ final class DebugMonitor {
 
     private func log(_ message: String) {
         print("[AngyDebug] \(message)")
+    }
+
+    private func previewText(from observation: TextObservation) -> String {
+        let lines = observation.rawText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(3)
+
+        let joined = lines.joined(separator: " | ")
+        guard !joined.isEmpty else {
+            return "-"
+        }
+
+        let compact = joined.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        if compact.count <= 160 {
+            return compact
+        }
+
+        let endIndex = compact.index(compact.startIndex, offsetBy: 160)
+        return String(compact[..<endIndex]) + "..."
     }
 
     private func format(rect: CGRect) -> String {

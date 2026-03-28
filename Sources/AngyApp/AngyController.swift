@@ -767,7 +767,8 @@ private actor SessionAnalysisWorker {
            permissions.accessibility,
            let rawText = accessibilityExtractor.extractText(
                 forBundleIdentifier: window.bundleID,
-                appName: window.appName
+                appName: window.appName,
+                windowTitle: window.title
            ),
            rawText.count >= minimumMeaningfulTextLength {
             return SessionObservationExtraction(
