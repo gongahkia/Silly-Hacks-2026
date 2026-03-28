@@ -149,3 +149,45 @@ final class TombstoneView: NSView {
         rip.draw(at: textOrigin)
     }
 }
+
+@MainActor
+final class InstanceBadgeView: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    override var fittingSize: NSSize {
+        let labelSize = label.fittingSize
+        return NSSize(width: labelSize.width + 14, height: max(22, labelSize.height + 8))
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 11
+        layer?.backgroundColor = NSColor(calibratedWhite: 0.05, alpha: 0.88).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor(calibratedWhite: 1, alpha: 0.16).cgColor
+
+        label.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+        label.textColor = NSColor(calibratedWhite: 1, alpha: 0.96)
+        label.alignment = .center
+        addSubview(label)
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = bounds.insetBy(dx: 7, dy: 4)
+    }
+
+    func update(text: String?) {
+        label.stringValue = text ?? ""
+        isHidden = (text ?? "").isEmpty
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+    }
+}

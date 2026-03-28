@@ -37,6 +37,25 @@ struct OverlayPresentationState: Sendable, Equatable {
     let stickerName: String
     let quip: String?
     let effectPhase: OverlayEffectPhase
+    let badgeText: String?
+
+    init(
+        emotion: CompanionState,
+        activity: SessionActivityState,
+        angerScore: Double,
+        stickerName: String,
+        quip: String?,
+        effectPhase: OverlayEffectPhase,
+        badgeText: String? = nil
+    ) {
+        self.emotion = emotion
+        self.activity = activity
+        self.angerScore = angerScore
+        self.stickerName = stickerName
+        self.quip = quip
+        self.effectPhase = effectPhase
+        self.badgeText = badgeText
+    }
 
     var rageMeterBand: RageMeterBand {
         RageMeterBand.band(for: angerScore)
@@ -49,7 +68,8 @@ struct OverlayPresentationState: Sendable, Equatable {
             angerScore: 0,
             stickerName: stickerName,
             quip: nil,
-            effectPhase: .alive
+            effectPhase: .alive,
+            badgeText: nil
         )
     }
 }

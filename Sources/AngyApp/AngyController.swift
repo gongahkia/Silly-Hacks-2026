@@ -3,10 +3,12 @@ import AngyCore
 import Foundation
 
 @MainActor
-final class AngyController: NSObject {
+final class AngyInstanceController: NSObject {
+    let id: AngyInstanceID
+    let role: AngyInstanceRole
+
     private let config: AppConfig
     private let permissionManager = PermissionManager()
-    private let windowTracker: WindowTracker
     private let analysisWorker = SessionAnalysisWorker()
     private let activityClassifier = SessionActivityClassifier()
     private let overlayController: CompanionOverlayController
@@ -14,13 +16,13 @@ final class AngyController: NSObject {
     private let sentimentEngine: SentimentEngine
     private let textBuffer: RollingTextBuffer
     private let debugMonitor = DebugMonitor.shared
-
-    private lazy var overlayRefreshDriver = OverlayRefreshDriver(
-        fallbackInterval: config.overlayRefreshInterval
-    ) { [weak self] in
-        self?.handleDisplayLinkedOverlayTick()
-    }
+    private let managesPermissions: Bool
+    private let warmStickersOnStart: Bool
+    private let allowsDisplayLinkedRefresh: Bool
+    private let autoRemoveWhenTargetLost: Bool
     private let explosionAnimationDuration: TimeInterval = 0.6
+
+    private var trackingSource: any TrackedWindowSource
     private var analysisTimer: Timer?
     private var analysisTask: Task<Void, Never>?
     private var effectTask: Task<Void, Never>?
@@ -39,11 +41,41 @@ final class AngyController: NSObject {
     private var nextStickerChangeDate: Date?
     private var explosionMonitor: ExplosionMonitor
     private var presentationState: OverlayPresentationState
+    private var isPaused = false
+    private var displayTag: String?
+    private var overrideState: CompanionState?
+    private var lastMatchedTriggers: [String] = []
+    private var isStarted = false
 
-    init(config: AppConfig) {
+    lazy var overlayRefreshDriver = OverlayRefreshDriver(
+        fallbackInterval: config.overlayRefreshInterval
+    ) { [weak self] in
+        self?.handleDisplayLinkedOverlayTick()
+    }
+
+    var onSnapshotChange: ((AngyInstanceSnapshot) -> Void)?
+    var onExplosion: ((AngyInstanceSnapshot) -> Void)?
+    var onTargetLost: ((AngyInstanceID) -> Void)?
+
+    init(
+        id: AngyInstanceID,
+        role: AngyInstanceRole,
+        config: AppConfig,
+        trackingSource: any TrackedWindowSource,
+        managesPermissions: Bool,
+        warmStickersOnStart: Bool,
+        allowsDisplayLinkedRefresh: Bool,
+        autoRemoveWhenTargetLost: Bool
+    ) {
         let defaultSticker = CompanionPersona.defaultSticker(for: .calm, activity: .default)
+        self.id = id
+        self.role = role
         self.config = config
-        self.windowTracker = WindowTracker(config: config)
+        self.trackingSource = trackingSource
+        self.managesPermissions = managesPermissions
+        self.warmStickersOnStart = warmStickersOnStart
+        self.allowsDisplayLinkedRefresh = allowsDisplayLinkedRefresh
+        self.autoRemoveWhenTargetLost = autoRemoveWhenTargetLost
         self.overlayController = CompanionOverlayController(config: config)
         self.soundEffectPlayer = SoundEffectPlayer(config: config)
         self.sentimentEngine = SentimentEngine(config: config)
@@ -55,13 +87,24 @@ final class AngyController: NSObject {
     }
 
     func start() {
-        debugMonitor.announceIfEnabled()
-        windowTracker.onWindowChange = { [weak self] in
+        guard !isStarted else {
+            return
+        }
+
+        isStarted = true
+        trackingSource.onWindowChange = { [weak self] in
             self?.scheduleWindowRefresh()
         }
-        windowTracker.startMonitoring()
-        scheduleStickerWarmup()
-        promptForPermissionsIfNeeded()
+        trackingSource.startMonitoring()
+
+        if warmStickersOnStart {
+            scheduleStickerWarmup()
+        }
+
+        if managesPermissions {
+            promptForPermissionsIfNeeded()
+        }
+
         scheduleWindowRefresh()
         scheduleAnalysis()
         updateOverlayRefreshDriver()
@@ -77,6 +120,8 @@ final class AngyController: NSObject {
         if let analysisTimer {
             RunLoop.main.add(analysisTimer, forMode: .common)
         }
+
+        notifySnapshotChanged()
     }
 
     func stop() {
@@ -92,8 +137,129 @@ final class AngyController: NSObject {
         windowRefreshTask?.cancel()
         windowRefreshTask = nil
         windowRefreshQueued = false
-        windowTracker.onWindowChange = nil
-        windowTracker.stopMonitoring()
+        trackingSource.onWindowChange = nil
+        trackingSource.stopMonitoring()
+        overlayController.hide()
+        isStarted = false
+    }
+
+    func setTrackingSource(_ trackingSource: any TrackedWindowSource) {
+        let wasStarted = isStarted
+        if wasStarted {
+            self.trackingSource.onWindowChange = nil
+            self.trackingSource.stopMonitoring()
+        }
+
+        self.trackingSource = trackingSource
+
+        if wasStarted {
+            self.trackingSource.onWindowChange = { [weak self] in
+                self?.scheduleWindowRefresh()
+            }
+            self.trackingSource.startMonitoring()
+            scheduleWindowRefresh()
+        }
+    }
+
+    func setDisplayTag(_ tag: String?) {
+        guard displayTag != tag else {
+            return
+        }
+
+        displayTag = tag
+        rebuildPresentationState()
+        presentCurrentState()
+        notifySnapshotChanged()
+    }
+
+    func pause() {
+        guard !isPaused else {
+            return
+        }
+
+        isPaused = true
+        analysisTask?.cancel()
+        analysisTask = nil
+        activeQuip = nil
+        rebuildPresentationState()
+        presentCurrentState()
+        notifySnapshotChanged()
+    }
+
+    func resume() {
+        guard isPaused else {
+            return
+        }
+
+        isPaused = false
+        scheduleAnalysis()
+        notifySnapshotChanged()
+    }
+
+    func setOverrideState(_ state: CompanionState) {
+        overrideState = state
+        rebuildPresentationState()
+        presentCurrentState()
+        notifySnapshotChanged()
+    }
+
+    func clearOverrideState() {
+        guard overrideState != nil else {
+            return
+        }
+
+        overrideState = nil
+        rebuildPresentationState()
+        presentCurrentState()
+        notifySnapshotChanged()
+    }
+
+    @discardableResult
+    func forceExplosion() -> Bool {
+        guard overlayEffectPhase == .alive, let trackedWindow else {
+            return false
+        }
+
+        let previousPresentation = presentationState
+        companionState = .furious
+        angerScore = max(angerScore, config.explosionThreshold)
+        return triggerExplosion(
+            window: trackedWindow,
+            previousPresentation: previousPresentation,
+            force: true
+        )
+    }
+
+    func snapshot() -> AngyInstanceSnapshot {
+        AngyInstanceSnapshot(
+            id: id,
+            role: role,
+            tag: displayTag,
+            target: trackedWindow.map(AngyWindowRef.init(window:)),
+            emotion: effectiveCompanionState,
+            activity: activityState,
+            angerScore: angerScore,
+            paused: isPaused,
+            effectPhase: overlayEffectPhase.rawValue,
+            quip: overlayEffectPhase == .alive ? activeQuip : nil,
+            matchedTriggers: lastMatchedTriggers
+        )
+    }
+
+    private var effectiveCompanionState: CompanionState {
+        overrideState ?? companionState
+    }
+
+    private func notifySnapshotChanged() {
+        onSnapshotChange?(snapshot())
+    }
+
+    private func presentCurrentState() {
+        if let trackedWindow {
+            overlayController.present(window: trackedWindow, presentation: presentationState)
+        } else {
+            overlayController.hide()
+        }
     }
 
     private func handleDisplayLinkedOverlayTick() {
@@ -102,6 +268,10 @@ final class AngyController: NSObject {
 
     @objc
     private func handleAnalysisTick() {
+        guard !isPaused else {
+            return
+        }
+
         scheduleAnalysis()
     }
 
@@ -119,7 +289,7 @@ final class AngyController: NSObject {
 
             repeat {
                 self.windowRefreshQueued = false
-                let trackedWindow = await self.windowTracker.currentTrackedWindow()
+                let trackedWindow = await self.trackingSource.currentTrackedWindow()
 
                 guard !Task.isCancelled else {
                     break
@@ -147,21 +317,34 @@ final class AngyController: NSObject {
             overlayController.hide()
         }
 
+        if autoRemoveWhenTargetLost,
+           previousWindowTarget != nil,
+           nextTrackedWindow == nil {
+            onTargetLost?(id)
+        }
+
         let currentWindowTarget = trackedWindow.map(AnalysisTarget.init)
         if previousWindowTarget != currentWindowTarget {
             analysisTask?.cancel()
             analysisTask = nil
-            if currentWindowTarget != nil {
+            if currentWindowTarget != nil, !isPaused {
                 scheduleAnalysis()
             }
         }
 
         updateOverlayRefreshDriver()
-        debugMonitor.recordOverlay(window: trackedWindow, state: companionState)
+        debugMonitor.recordOverlay(window: trackedWindow, state: effectiveCompanionState)
+        notifySnapshotChanged()
     }
 
     private func scheduleAnalysis() {
-        promptForPermissionsIfNeeded()
+        if managesPermissions {
+            promptForPermissionsIfNeeded()
+        }
+
+        guard !isPaused else {
+            return
+        }
 
         guard let window = trackedWindow else {
             if overlayEffectPhase == .alive {
@@ -174,7 +357,9 @@ final class AngyController: NSObject {
                 companionState = result.currentState
                 activityState = .default
                 activeQuip = nil
+                lastMatchedTriggers = []
                 rebuildPresentationState()
+                notifySnapshotChanged()
             }
             return
         }
@@ -186,6 +371,7 @@ final class AngyController: NSObject {
         let permissions = permissionManager.status()
         let analysisTarget = AnalysisTarget(window)
         let minimumMeaningfulTextLength = config.minimumMeaningfulTextLength
+        let preferAccessibility = role == .primary || window.isFocused
 
         analysisTask = Task { [weak self] in
             guard let self else {
@@ -195,7 +381,8 @@ final class AngyController: NSObject {
             let extraction = await analysisWorker.extractObservation(
                 for: window,
                 permissions: permissions,
-                minimumMeaningfulTextLength: minimumMeaningfulTextLength
+                minimumMeaningfulTextLength: minimumMeaningfulTextLength,
+                preferAccessibility: preferAccessibility
             )
 
             guard !Task.isCancelled else {
@@ -249,6 +436,7 @@ final class AngyController: NSObject {
             sentimentResult: result,
             config: config
         )
+        lastMatchedTriggers = result.matchedTriggers
         updateStickerIfNeeded(
             matchedTriggers: result.matchedTriggers,
             previousState: previousState,
@@ -265,20 +453,24 @@ final class AngyController: NSObject {
         )
         rebuildPresentationState()
 
-        let now = extraction.observation?.timestamp ?? Date()
-        let didExplode = maybeTriggerExplosion(now: now, window: window, previousPresentation: previousPresentation)
+        let didExplode = triggerExplosion(
+            window: window,
+            previousPresentation: previousPresentation,
+            force: false
+        )
 
         debugMonitor.recordAnalysis(
             extraction: extraction.reason,
             observation: extraction.observation,
             angerScore: angerScore,
-            state: companionState,
+            state: effectiveCompanionState,
             stickerName: activeStickerName,
             triggers: result.matchedTriggers,
             quip: activeQuip
         )
 
         if didExplode {
+            notifySnapshotChanged()
             return
         }
 
@@ -290,6 +482,7 @@ final class AngyController: NSObject {
             )
         )
         overlayController.present(window: window, presentation: presentationState)
+        notifySnapshotChanged()
     }
 
     private func promptForPermissionsIfNeeded() {
@@ -413,7 +606,8 @@ final class AngyController: NSObject {
     }
 
     private var shouldRunDisplayLinkedRefresh: Bool {
-        guard let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else {
+        guard allowsDisplayLinkedRefresh,
+              let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else {
             return false
         }
 
@@ -428,26 +622,31 @@ final class AngyController: NSObject {
         activeStickerName = stickerName
 
         presentationState = OverlayPresentationState(
-            emotion: companionState,
+            emotion: effectiveCompanionState,
             activity: activityState,
             angerScore: angerScore,
             stickerName: stickerName,
             quip: overlayEffectPhase == .alive ? activeQuip : nil,
-            effectPhase: overlayEffectPhase
+            effectPhase: overlayEffectPhase,
+            badgeText: role == .spawned ? displayTag : nil
         )
     }
 
-    private func maybeTriggerExplosion(
-        now: Date,
+    @discardableResult
+    private func triggerExplosion(
         window: TrackedWindow,
-        previousPresentation: OverlayPresentationState
+        previousPresentation: OverlayPresentationState,
+        force: Bool
     ) -> Bool {
-        guard overlayEffectPhase == .alive,
-              explosionMonitor.shouldExplode(
-                emotion: companionState,
-                angerScore: angerScore,
-                now: now
-              ) else {
+        guard overlayEffectPhase == .alive else {
+            return false
+        }
+
+        guard force || explosionMonitor.shouldExplode(
+            emotion: companionState,
+            angerScore: angerScore,
+            now: Date()
+        ) else {
             return false
         }
 
@@ -465,6 +664,7 @@ final class AngyController: NSObject {
         )
         overlayController.present(window: window, presentation: presentationState)
         scheduleExplosionEffectLifecycle()
+        onExplosion?(snapshot())
 
         return true
     }
@@ -504,10 +704,8 @@ final class AngyController: NSObject {
 
         overlayEffectPhase = .tombstone
         rebuildPresentationState()
-
-        if let trackedWindow {
-            overlayController.present(window: trackedWindow, presentation: presentationState)
-        }
+        presentCurrentState()
+        notifySnapshotChanged()
     }
 
     private func resetAfterExplosion() {
@@ -516,16 +714,15 @@ final class AngyController: NSObject {
         companionState = .calm
         activityState = .default
         activeQuip = nil
+        lastMatchedTriggers = []
         lastQuipDate = nil
         nextStickerChangeDate = nil
         activeStickerName = CompanionPersona.defaultSticker(for: .calm, activity: .default)
         textBuffer.clear()
         explosionMonitor.startCooldown(now: Date())
         rebuildPresentationState()
-
-        if let trackedWindow {
-            overlayController.present(window: trackedWindow, presentation: presentationState)
-        }
+        presentCurrentState()
+        notifySnapshotChanged()
     }
 
     private func playSoundEvents(_ events: [SoundEffectEvent]) {
@@ -557,7 +754,8 @@ private actor SessionAnalysisWorker {
     func extractObservation(
         for window: TrackedWindow,
         permissions: PermissionStatus,
-        minimumMeaningfulTextLength: Int
+        minimumMeaningfulTextLength: Int,
+        preferAccessibility: Bool
     ) -> SessionObservationExtraction {
         if Task.isCancelled {
             return SessionObservationExtraction(observation: nil, reason: "cancelled")
@@ -565,7 +763,8 @@ private actor SessionAnalysisWorker {
 
         let now = Date()
 
-        if permissions.accessibility,
+        if preferAccessibility,
+           permissions.accessibility,
            let rawText = accessibilityExtractor.extractText(
                 forBundleIdentifier: window.bundleID,
                 appName: window.appName
@@ -596,8 +795,10 @@ private actor SessionAnalysisWorker {
 
         if !permissions.accessibility {
             reasons.append("accessibility_denied")
-        } else {
+        } else if preferAccessibility {
             reasons.append("accessibility_empty_or_short")
+        } else {
+            reasons.append("accessibility_skipped")
         }
 
         if !permissions.screenRecording {

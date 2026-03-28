@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-public enum TextSource: String, Sendable, CaseIterable {
+public enum TextSource: String, Sendable, CaseIterable, Codable {
     case accessibility
     case ocr
 }
@@ -14,6 +14,7 @@ public struct TrackedWindow: Sendable, Equatable {
     public var screenID: String?
     public var isVisible: Bool
     public var title: String?
+    public var isFocused: Bool
 
     public init(
         bundleID: String,
@@ -22,7 +23,8 @@ public struct TrackedWindow: Sendable, Equatable {
         frame: CGRect,
         screenID: String?,
         isVisible: Bool,
-        title: String?
+        title: String?,
+        isFocused: Bool = false
     ) {
         self.bundleID = bundleID
         self.appName = appName
@@ -31,6 +33,7 @@ public struct TrackedWindow: Sendable, Equatable {
         self.screenID = screenID
         self.isVisible = isVisible
         self.title = title
+        self.isFocused = isFocused
     }
 }
 
@@ -56,14 +59,14 @@ public struct TextObservation: Sendable, Equatable {
     }
 }
 
-public enum CompanionState: String, Sendable, CaseIterable {
+public enum CompanionState: String, Sendable, CaseIterable, Codable {
     case calm
     case curious
     case annoyed
     case furious
 }
 
-public enum SessionActivityState: String, Sendable, CaseIterable {
+public enum SessionActivityState: String, Sendable, CaseIterable, Codable {
     case `default`
     case reading
     case thinking

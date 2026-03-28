@@ -3,14 +3,14 @@ import AngyCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var controller: AngyController?
+    private var coordinator: AngyHiveCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        controller = AngyController(config: .live)
-        controller?.start()
+        coordinator = AngyHiveCoordinator(config: .live)
+        coordinator?.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        controller?.stop()
+        coordinator?.stop()
     }
 }

@@ -20,6 +20,9 @@ public struct AppConfig: Sendable, Equatable {
     public var explosionHoldDuration: TimeInterval
     public var tombstoneDuration: TimeInterval
     public var explosionCooldown: TimeInterval
+    public var spawnedWindowRefreshInterval: TimeInterval
+    public var hateMailCooldown: TimeInterval
+    public var hateMailOutputFolderName: String
     public var calmUpperBound: Double
     public var curiousUpperBound: Double
     public var annoyedUpperBound: Double
@@ -44,6 +47,9 @@ public struct AppConfig: Sendable, Equatable {
         explosionHoldDuration: TimeInterval,
         tombstoneDuration: TimeInterval,
         explosionCooldown: TimeInterval,
+        spawnedWindowRefreshInterval: TimeInterval,
+        hateMailCooldown: TimeInterval,
+        hateMailOutputFolderName: String,
         calmUpperBound: Double,
         curiousUpperBound: Double,
         annoyedUpperBound: Double,
@@ -67,6 +73,9 @@ public struct AppConfig: Sendable, Equatable {
         self.explosionHoldDuration = explosionHoldDuration
         self.tombstoneDuration = tombstoneDuration
         self.explosionCooldown = explosionCooldown
+        self.spawnedWindowRefreshInterval = spawnedWindowRefreshInterval
+        self.hateMailCooldown = hateMailCooldown
+        self.hateMailOutputFolderName = hateMailOutputFolderName
         self.calmUpperBound = calmUpperBound
         self.curiousUpperBound = curiousUpperBound
         self.annoyedUpperBound = annoyedUpperBound
@@ -94,6 +103,9 @@ public extension AppConfig {
         explosionHoldDuration: 3.0,
         tombstoneDuration: 3.0,
         explosionCooldown: 20.0,
+        spawnedWindowRefreshInterval: 0.25,
+        hateMailCooldown: 600.0,
+        hateMailOutputFolderName: "Angy Hate Mail",
         calmUpperBound: 24,
         curiousUpperBound: 44,
         annoyedUpperBound: 69,

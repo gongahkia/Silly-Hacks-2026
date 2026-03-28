@@ -5,7 +5,7 @@ import CoreGraphics
 import Foundation
 
 @MainActor
-final class WindowTracker {
+final class WindowTracker: TrackedWindowSource {
     private let config: AppConfig
     private let trackingAXTimeout: Float = 0.05
     private var workspaceObservers: [NSObjectProtocol] = []

@@ -11,4 +11,10 @@ final class AppConfigTests: XCTestCase {
         XCTAssertTrue(AppConfig.live.targetOwnerNames.contains("Ghostty"))
         XCTAssertTrue(AppConfig.live.targetOwnerNames.contains("cmux"))
     }
+
+    func testLiveConfigIncludesSpawnedWindowAndHateMailDefaults() {
+        XCTAssertEqual(AppConfig.live.spawnedWindowRefreshInterval, 0.25, accuracy: 0.001)
+        XCTAssertEqual(AppConfig.live.hateMailCooldown, 600, accuracy: 0.001)
+        XCTAssertEqual(AppConfig.live.hateMailOutputFolderName, "Angy Hate Mail")
+    }
 }

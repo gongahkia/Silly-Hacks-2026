@@ -10,6 +10,7 @@ final class CompanionOverlayView: NSView {
     private let stickerView = ASCIIStickerView(frame: .zero)
     private let tombstoneView = TombstoneView(frame: .zero)
     private let rageMeterView = RageMeterView(frame: .zero)
+    private let badgeView = InstanceBadgeView(frame: .zero)
     private let flashLayer = CALayer()
     private var currentStickerAssetKey: String?
     private var stickerLoadTask: Task<Void, Never>?
@@ -73,11 +74,19 @@ final class CompanionOverlayView: NSView {
         stickerView.frame = bodyFrame
         tombstoneView.frame = bodyFrame
         rageMeterView.frame = NSRect(x: 0, y: 0, width: currentContentSize.width, height: rageMeterHeight)
+        let badgeSize = badgeView.fittingSize
+        badgeView.frame = NSRect(
+            x: currentContentSize.width - badgeSize.width - 6,
+            y: currentContentSize.height - badgeSize.height - 4,
+            width: badgeSize.width,
+            height: badgeSize.height
+        )
         flashLayer.frame = bounds
     }
 
     func update(presentation: OverlayPresentationState) {
         rageMeterView.update(score: presentation.angerScore)
+        badgeView.update(text: presentation.badgeText)
         loadStickerIfNeeded(named: presentation.stickerName)
         applyEffectPhase(presentation.effectPhase)
     }
@@ -195,10 +204,12 @@ final class CompanionOverlayView: NSView {
 
         stickerView.isHidden = true
         tombstoneView.isHidden = true
+        badgeView.isHidden = true
 
         addSubview(stickerView)
         addSubview(tombstoneView)
         addSubview(rageMeterView)
+        addSubview(badgeView)
 
         flashLayer.backgroundColor = NSColor.white.withAlphaComponent(0.0).cgColor
         flashLayer.opacity = 0
