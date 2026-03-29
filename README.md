@@ -3,11 +3,13 @@
 ## Requirements
 
 - macOS 14+
-- `Accessibility` permission for UI text extraction
-- `Screen Recording` permission for OCR fallback
+- Codex CLI logged in (`codex login`)
+- `Accessibility` permission for UI text extraction (legacy mode only)
+- `Screen Recording` permission for OCR fallback (legacy mode only)
 - Optional but recommended: `ffmpeg` and `ffprobe` on `PATH` for video sticker assets
 
-If only one permission is granted, Angy still runs but analysis degrades to the remaining extraction path. If neither permission is granted, the overlay can launch but live session analysis effectively stops.
+By default, Angy reads Codex assistant output from `~/.codex/sessions/**/rollout-*.jsonl`.
+If you use legacy mode, only one permission is required for degraded extraction, and both permissions together unlock the full Accessibility+OCR path.
 
 ## Run
 
@@ -17,14 +19,40 @@ Start the app:
 swift run Angy
 ```
 
+Legacy screen-reading mode (the old behavior):
+
+```bash
+swift run Angy -- --legacy
+```
+
 Useful environment variables:
 
 ```bash
 ANGY_DEBUG=1 swift run Angy
 ANGY_OVERLAY_ASSETS=/absolute/path/to/assets swift run Angy
+ANGY_CODEX_HOME=/absolute/path/to/.codex swift run Angy
+ANGY_LEGACY=1 swift run Angy
 ```
 
-On first run, Angy will prompt for missing macOS permissions and can open the relevant System Settings pages.
+In default mode, Angy does not require macOS Accessibility/Screen Recording permissions.
+In legacy mode, Angy will prompt for missing permissions and can open the relevant System Settings pages.
+
+### App Server setup (optional)
+
+If you want Codex running through an explicit app-server endpoint:
+
+```bash
+# Terminal 1
+codex app-server --listen ws://127.0.0.1:8765
+
+# Terminal 2
+codex --remote ws://127.0.0.1:8765
+
+# Terminal 3
+swift run Angy
+```
+
+As long as Codex writes session rollouts into the same `~/.codex` directory Angy is watching, Angy picks up the assistant output.
 
 ## CLI
 
@@ -44,6 +72,7 @@ swift run AngyCLI instances set-state '#1' furious
 swift run AngyCLI instances clear-state '#1'
 swift run AngyCLI instances explode '#1'
 swift run AngyCLI instances hate-mail '#1'
+swift run AngyCLI instances hate-mail '#1' --force
 swift run AngyCLI settings get
 swift run AngyCLI settings set hateMailEnabled true
 swift run AngyCLI settings set pauseAll true
@@ -63,7 +92,7 @@ AngyCLI instances target <id|#tag> --window-id <id>
 AngyCLI instances set-state <id|#tag> <calm|curious|annoyed|furious>
 AngyCLI instances clear-state <id|#tag>
 AngyCLI instances explode <id|#tag>
-AngyCLI instances hate-mail <id|#tag>
+AngyCLI instances hate-mail <id|#tag> [--force]
 AngyCLI settings get [--json]
 AngyCLI settings set <key> <value>
 ```
