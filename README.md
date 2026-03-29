@@ -1,55 +1,5 @@
 # Angy
 
-![Angy mascot](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRb70TVbvcjEU8LZAsWyVCsrFZO2thUTz-zRw&s)
-
-Angy is a local macOS menu-bar companion for coding sessions. The primary Angy follows the active Codex or Ghostty window, extracts visible text with Accessibility and OCR, scores frustration locally, and reacts with stickers, quips, sounds, and a full rage/explosion sequence when a session goes bad.
-
-The repository currently ships three targets:
-
-- `AngyCore`: shared analysis, state, control, and rendering primitives
-- `Angy`: the macOS accessory app in `Sources/AngyApp`
-- `AngyCLI`: a local CLI for driving the running app through its control plane
-
-## Current implementation
-
-- Menu-bar macOS accessory app with no normal Dock window
-- Primary Angy that auto-follows the frontmost supported session window
-- Default tracking for `Codex` and `Ghostty` via bundle ids `com.openai.codex` and `com.mitchellh.ghostty`
-- Ghostty launcher detection so Angy can ignore the terminal that launched it and follow Codex instead when appropriate
-- Transparent borderless overlay pinned near the tracked window and draggable within screen bounds
-- Spawned Angys for additional windows, tagged as `#1`, `#2`, and so on
-- Pinned spawned companions auto-remove themselves when their target window disappears
-- Hybrid text ingestion:
-  - Accessibility text first when available
-  - Vision OCR fallback from live window capture when Accessibility is unavailable or too thin
-- Local sentiment analysis using Apple `NaturalLanguage` plus coding-specific trigger heuristics
-- Activity classification with `default`, `reading`, `thinking`, `blocked`, and `celebrating` modes
-- Emotion states with `calm`, `curious`, `annoyed`, and `furious`
-- Overlay presentation features:
-  - rage meter with critical pulse
-  - sticker rotation driven by emotion, activity, and matched triggers
-  - contextual quips
-  - optional sound cues
-  - explosion animation followed by a tombstone state after sustained critical rage
-- Local hate-mail generation with cooldowns, written to `~/Desktop/Angy Hate Mail` when enabled
-- Menu-bar controls for spawning, attaching, pausing, resuming, retargeting, exploding, overriding state, and writing hate mail
-- Local authenticated control plane on `127.0.0.1` with discovery metadata published to `~/Library/Application Support/Angy/control-plane.json`
-- CLI support for listing windows and instances, spawning and removing companions, retargeting, pausing and resuming, forcing explosions, writing hate mail, and mutating settings
-
-## Sticker and asset pipeline
-
-Angy resolves sticker assets from:
-
-- bundled resources in `Sources/AngyApp/Resources/Stickers`
-- the repo root
-- `overlay-assets/`
-- `gif/`
-- `ANGY_OVERLAY_ASSETS` if set
-
-Supported asset formats include raster frames (`png`, `jpg`, `jpeg`, `gif`, `webp`, `tiff`, `bmp`) and video stickers (`webm`, `mp4`, `mov`, `m4v`).
-
-The current fallback overlay asset in this repo is `overlay-assets/default.webm`. Video sticker decoding prefers `ffmpeg` and `ffprobe` when they are available on `PATH`, then falls back to a WebKit-based decoder.
-
 ## Requirements
 
 - macOS 14+
@@ -128,6 +78,39 @@ Currently supported mutable settings are:
 ```bash
 swift test
 ```
+
+## Team Members
+
+<table>
+	<tbody>
+        <tr>
+            <td align="center">
+                <a href="https://github.com/weisintai">
+                    <img src="https://avatars.githubusercontent.com/u/59339889?v=4" width="100;" alt=""/>
+                    <br />
+                    <sub><b>Wei Sin</b></sub>
+                </a>
+                <br />
+            </td>
+            <td align="center">
+                <a href="https://github.com/injaneity">
+                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt=""/>
+                    <br />
+                    <sub><b>Zane Chee</b></sub>
+                </a>
+                <br />
+            </td> 
+            <td align="center">
+                <a href="https://github.com/gongahkia">
+                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
+                    <br />
+                    <sub><b>Gabriel Ong</b></sub>
+                </a>
+                <br />
+            </td>
+        </tr>
+	</tbody>
+</table>
 
 ## Repo notes
 
