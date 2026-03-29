@@ -423,6 +423,9 @@ final class AngyInstanceController: NSObject {
         let previousState = companionState
         let previousActivity = activityState
         let previousPresentation = presentationState
+        let previousAngerScore = angerScore
+        let previousEffectiveState = effectiveCompanionState
+        let previousStickerName = activeStickerName
         let result = sentimentEngine.analyze(
             observations: textBuffer.observations,
             previousAngerScore: angerScore,
@@ -437,12 +440,13 @@ final class AngyInstanceController: NSObject {
             config: config
         )
         lastMatchedTriggers = result.matchedTriggers
-        updateStickerIfNeeded(
+        let stickerChangeReason = updateStickerIfNeeded(
             matchedTriggers: result.matchedTriggers,
             previousState: previousState,
             currentState: result.currentState,
             previousActivity: previousActivity,
-            currentActivity: activityState
+            currentActivity: activityState,
+            hasFreshObservation: extraction.observation == nil ? false : true
         )
         activeQuip = nextQuip(
             matchedTriggers: result.matchedTriggers,
@@ -462,11 +466,15 @@ final class AngyInstanceController: NSObject {
         debugMonitor.recordAnalysis(
             extraction: extraction.reason,
             observation: extraction.observation,
+            previousAngerScore: previousAngerScore,
             angerScore: angerScore,
+            previousState: previousEffectiveState,
             state: effectiveCompanionState,
+            previousStickerName: previousStickerName,
             stickerName: activeStickerName,
             triggers: result.matchedTriggers,
-            quip: activeQuip
+            quip: activeQuip,
+            stickerChangeReason: stickerChangeReason
         )
 
         if didExplode {
@@ -536,10 +544,11 @@ final class AngyInstanceController: NSObject {
         previousState: CompanionState,
         currentState: CompanionState,
         previousActivity: SessionActivityState,
-        currentActivity: SessionActivityState
-    ) {
+        currentActivity: SessionActivityState,
+        hasFreshObservation: Bool
+    ) -> String? {
         guard overlayEffectPhase == .alive else {
-            return
+            return nil
         }
 
         let now = Date()
@@ -547,8 +556,19 @@ final class AngyInstanceController: NSObject {
         let activityChanged = previousActivity != currentActivity
         let canRotateSticker = nextStickerChangeDate.map { now >= $0 } ?? true
 
-        guard activeStickerName == nil || stateChanged || activityChanged || canRotateSticker else {
-            return
+        guard activeStickerName == nil || stateChanged || activityChanged || (hasFreshObservation && canRotateSticker) else {
+            return nil
+        }
+
+        let reason: String
+        if activeStickerName == nil {
+            reason = "initial"
+        } else if stateChanged {
+            reason = "state_changed"
+        } else if activityChanged {
+            reason = "activity_changed"
+        } else {
+            reason = "new_message_rotation"
         }
 
         activeStickerName = CompanionPersona.stickerName(
@@ -560,6 +580,7 @@ final class AngyInstanceController: NSObject {
         nextStickerChangeDate = now.addingTimeInterval(
             Double.random(in: config.stickerHoldMinimum...config.stickerHoldMaximum)
         )
+        return reason
     }
 
     private func scheduleStickerWarmup() {

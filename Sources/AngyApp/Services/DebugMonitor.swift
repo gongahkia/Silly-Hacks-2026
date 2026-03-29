@@ -6,16 +6,21 @@ final class DebugMonitor {
     static let shared = DebugMonitor()
 
     private let isEnabled: Bool
+    private let isVerboseEnabled: Bool
     private var overlayTickCount = 0
     private var analysisTickCount = 0
     private var lastRateLogDate = Date()
     private var lastVisibility = false
     private var lastLoggedState: CompanionState?
-    private var lastStickerName: String?
+    private var lastExtractionReason: String?
+    private var lastObservationSignature: String?
+    private var lastTriggerSignature: String?
+    private var lastQuip: String?
 
     private init() {
         let environment = ProcessInfo.processInfo.environment
         isEnabled = environment["ANGY_DEBUG"] == "1"
+        isVerboseEnabled = environment["ANGY_DEBUG_VERBOSE"] == "1"
     }
 
     var isEnabledForUI: Bool {
@@ -53,11 +58,15 @@ final class DebugMonitor {
     func recordAnalysis(
         extraction: String,
         observation: TextObservation?,
+        previousAngerScore: Double,
         angerScore: Double,
+        previousState: CompanionState,
         state: CompanionState,
+        previousStickerName: String?,
         stickerName: String?,
         triggers: [String],
-        quip: String?
+        quip: String?,
+        stickerChangeReason: String?
     ) {
         guard isEnabled else { return }
 
@@ -66,27 +75,54 @@ final class DebugMonitor {
 
         let characters = observation?.rawText.count ?? 0
         let confidence = observation.map { String(format: "%.2f", $0.confidence) } ?? "-"
+        let previousScore = String(format: "%.1f", previousAngerScore)
         let score = String(format: "%.1f", angerScore)
         let preview = observation.map(previewText(from:)) ?? "-"
-        let triggerSummary: String
-        if triggers.isEmpty {
-            triggerSummary = "-"
-        } else {
-            let uniqueTriggers = Array(NSOrderedSet(array: triggers)) as? [String] ?? triggers
-            let preview = uniqueTriggers.prefix(5).joined(separator: ",")
-            triggerSummary = "\(preview) total=\(triggers.count)"
-        }
-        let quipSummary = quip ?? "-"
-        let stickerSummary = stickerName ?? "-"
+        let uniqueTriggers = uniquePreservingOrder(triggers)
+        let triggerSummary = triggerSummary(for: uniqueTriggers, totalCount: triggers.count)
+        let triggerSignature = uniqueTriggers.joined(separator: "|")
 
-        if lastStickerName != stickerName, let stickerName {
-            log("sticker changed name=\(stickerName)")
-            lastStickerName = stickerName
+        if extraction != lastExtractionReason {
+            log("analysis source=\(extraction)")
+            lastExtractionReason = extraction
         }
 
-        log(
-            "analysis source=\(extraction) chars=\(characters) confidence=\(confidence) anger=\(score) state=\(state.rawValue) sticker=\(stickerSummary) triggers=\(triggerSummary) preview=\(preview) quip=\(quipSummary)"
-        )
+        let observationSignature = observation.map { "\($0.source.rawValue)|\($0.normalizedText)" }
+        if observationSignature != lastObservationSignature, let observation {
+            log(
+                "message observed source=\(observation.source.rawValue) chars=\(characters) confidence=\(confidence) preview=\(preview)"
+            )
+            lastObservationSignature = observationSignature
+        } else if observation == nil {
+            lastObservationSignature = nil
+        }
+
+        if triggerSignature != lastTriggerSignature, !uniqueTriggers.isEmpty {
+            log("triggers updated value=\(triggerSummary)")
+            lastTriggerSignature = triggerSignature
+        } else if uniqueTriggers.isEmpty {
+            lastTriggerSignature = nil
+        }
+
+        if previousState != state {
+            log(
+                "emotion changed from=\(previousState.rawValue) to=\(state.rawValue) anger=\(previousScore)->\(score) triggers=\(triggerSummary) preview=\(preview)"
+            )
+        }
+
+        if previousStickerName != stickerName, let stickerName {
+            let previousSticker = previousStickerName ?? "-"
+            let reason = stickerChangeReason ?? "unspecified"
+            log(
+                "sticker changed from=\(previousSticker) to=\(stickerName) reason=\(reason) state=\(state.rawValue)"
+            )
+        }
+
+        if quip != lastQuip {
+            let quipSummary = quip ?? "-"
+            log("quip changed text=\(quipSummary)")
+            lastQuip = quip
+        }
     }
 
     func recordStickerAsset(name: String, loaded: Bool, size: CGSize?) {
@@ -102,6 +138,8 @@ final class DebugMonitor {
     }
 
     private func maybeLogRates() {
+        guard isVerboseEnabled else { return }
+
         let now = Date()
         let elapsed = now.timeIntervalSince(lastRateLogDate)
         guard elapsed >= 1 else { return }
@@ -120,6 +158,27 @@ final class DebugMonitor {
 
     private func log(_ message: String) {
         print("[AngyDebug] \(message)")
+    }
+
+    private func uniquePreservingOrder(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var unique: [String] = []
+        unique.reserveCapacity(values.count)
+
+        for value in values where seen.insert(value).inserted {
+            unique.append(value)
+        }
+
+        return unique
+    }
+
+    private func triggerSummary(for uniqueTriggers: [String], totalCount: Int) -> String {
+        guard !uniqueTriggers.isEmpty else {
+            return "-"
+        }
+
+        let preview = uniqueTriggers.prefix(5).joined(separator: ",")
+        return "\(preview) total=\(totalCount)"
     }
 
     private func previewText(from observation: TextObservation) -> String {
