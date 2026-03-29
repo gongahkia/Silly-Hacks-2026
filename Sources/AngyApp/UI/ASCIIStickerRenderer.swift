@@ -37,7 +37,12 @@ actor ASCIIStickerRenderer {
     private let pipelineVersion = 7
     private let fileManager = FileManager.default
     private let debugEnabled = ProcessInfo.processInfo.environment["ANGY_DEBUG"] == "1"
+    private let verboseEnabled = ProcessInfo.processInfo.environment["ANGY_DEBUG_VERBOSE"] == "1"
     private var memoryCache: [String: RenderedASCIIStickerSequence] = [:]
+
+    private var traceEnabled: Bool {
+        debugEnabled && verboseEnabled
+    }
 
     func renderSequence(from assetSource: StickerAssetSource?) async -> RenderedASCIIStickerSequence? {
         guard let assetSource else {
@@ -46,12 +51,12 @@ actor ASCIIStickerRenderer {
 
         let cacheDescriptor = pipelineCacheDescriptor(for: assetSource)
 
-        if debugEnabled {
+        if traceEnabled {
             print("[AngyStickerRenderer] renderSequence start key=\(assetSource.cacheKey)")
         }
 
         if let cached = memoryCache[cacheDescriptor] {
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] memory-cache-hit key=\(assetSource.cacheKey)")
             }
             return cached
@@ -59,7 +64,7 @@ actor ASCIIStickerRenderer {
 
         if let diskCached = loadSequenceFromDisk(cacheDescriptor: cacheDescriptor) {
             memoryCache[cacheDescriptor] = diskCached
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] disk-cache-hit key=\(assetSource.cacheKey)")
             }
             return diskCached
@@ -74,7 +79,7 @@ actor ASCIIStickerRenderer {
         }
 
         guard !frameAssets.isEmpty else {
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] no-frames key=\(assetSource.cacheKey)")
             }
             return nil
@@ -83,7 +88,7 @@ actor ASCIIStickerRenderer {
         if frameAssets.allSatisfy(\.skipBackgroundRemoval) {
             let renderedFrames = frameAssets.compactMap(renderedDirectFrame(from:))
             guard !renderedFrames.isEmpty else {
-                if debugEnabled {
+                if traceEnabled {
                     print("[AngyStickerRenderer] direct-render-failed key=\(assetSource.cacheKey)")
                 }
                 return nil
@@ -110,7 +115,7 @@ actor ASCIIStickerRenderer {
 
         let preparedFrames = frameAssets.compactMap(preparedFrame(from:))
         guard !preparedFrames.isEmpty else {
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] prepare-failed key=\(assetSource.cacheKey)")
             }
             return nil
@@ -119,7 +124,7 @@ actor ASCIIStickerRenderer {
         let cropRect = sequenceCropRect(for: preparedFrames)
         let renderedFrames = preparedFrames.compactMap { renderedFrame(from: $0, cropRect: cropRect) }
         guard !renderedFrames.isEmpty else {
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] render-failed key=\(assetSource.cacheKey)")
             }
             return nil
@@ -142,7 +147,7 @@ actor ASCIIStickerRenderer {
         memoryCache[cacheDescriptor] = sequence
         saveSequenceToDisk(sequence, cacheDescriptor: cacheDescriptor)
 
-        if debugEnabled {
+        if traceEnabled {
             print("[AngyStickerRenderer] renderSequence finished key=\(assetSource.cacheKey) frames=\(sequence.frames.count) size=\(Int(sequence.layoutSize.width))x\(Int(sequence.layoutSize.height))")
         }
 
@@ -362,7 +367,7 @@ actor ASCIIStickerRenderer {
 
         let remainingOpaquePixels = opaquePixelCount(in: bytes)
         let minimumRemainingPixels = max(256, Int(Double(originalOpaquePixelCount) * 0.01))
-        if debugEnabled {
+        if traceEnabled {
             print(
                 "[AngyStickerRenderer] bgremove original=\(originalOpaquePixelCount) remaining=\(remainingOpaquePixels) minimum=\(minimumRemainingPixels) bg=\(backgroundColor.red),\(backgroundColor.green),\(backgroundColor.blue)"
             )
@@ -581,7 +586,7 @@ actor ASCIIStickerRenderer {
             let data = try JSONEncoder().encode(manifest)
             try data.write(to: directoryURL.appendingPathComponent("manifest.json", isDirectory: false), options: .atomic)
         } catch {
-            if debugEnabled {
+            if traceEnabled {
                 print("[AngyStickerRenderer] disk-cache-write-failed error=\(error)")
             }
         }
