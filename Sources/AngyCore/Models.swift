@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 
 public enum TextSource: String, Sendable, CaseIterable, Codable {
+    case codexOutput
     case accessibility
     case ocr
 }

@@ -9,13 +9,14 @@ final class AngyInstanceController: NSObject {
 
     private let config: AppConfig
     private let permissionManager = PermissionManager()
-    private let analysisWorker = SessionAnalysisWorker()
+    private let analysisWorker: SessionAnalysisWorker
     private let activityClassifier = SessionActivityClassifier()
     private let overlayController: CompanionOverlayController
     private let soundEffectPlayer: SoundEffectPlayer
     private let sentimentEngine: SentimentEngine
     private let textBuffer: RollingTextBuffer
     private let debugMonitor = DebugMonitor.shared
+    private let textIngestionMode: TextIngestionMode
     private let managesPermissions: Bool
     private let warmStickersOnStart: Bool
     private let allowsDisplayLinkedRefresh: Bool
@@ -61,6 +62,8 @@ final class AngyInstanceController: NSObject {
         id: AngyInstanceID,
         role: AngyInstanceRole,
         config: AppConfig,
+        textIngestionMode: TextIngestionMode,
+        codexHomeDirectory: URL,
         trackingSource: any TrackedWindowSource,
         managesPermissions: Bool,
         warmStickersOnStart: Bool,
@@ -71,11 +74,18 @@ final class AngyInstanceController: NSObject {
         self.id = id
         self.role = role
         self.config = config
+        self.textIngestionMode = textIngestionMode
         self.trackingSource = trackingSource
         self.managesPermissions = managesPermissions
         self.warmStickersOnStart = warmStickersOnStart
         self.allowsDisplayLinkedRefresh = allowsDisplayLinkedRefresh
         self.autoRemoveWhenTargetLost = autoRemoveWhenTargetLost
+        self.analysisWorker = SessionAnalysisWorker(
+            textIngestionMode: textIngestionMode,
+            codexRolloutSource: textIngestionMode == .legacyScreenCapture
+                ? nil
+                : CodexRolloutTextSource(codexHomeDirectory: codexHomeDirectory)
+        )
         self.overlayController = CompanionOverlayController(config: config)
         self.soundEffectPlayer = SoundEffectPlayer(config: config)
         self.sentimentEngine = SentimentEngine(config: config)
@@ -101,7 +111,7 @@ final class AngyInstanceController: NSObject {
             scheduleStickerWarmup()
         }
 
-        if managesPermissions {
+        if managesPermissions, textIngestionMode == .legacyScreenCapture {
             promptForPermissionsIfNeeded()
         }
 
@@ -338,7 +348,7 @@ final class AngyInstanceController: NSObject {
     }
 
     private func scheduleAnalysis() {
-        if managesPermissions {
+        if managesPermissions, textIngestionMode == .legacyScreenCapture {
             promptForPermissionsIfNeeded()
         }
 
@@ -368,7 +378,9 @@ final class AngyInstanceController: NSObject {
             return
         }
 
-        let permissions = permissionManager.status()
+        let permissions = textIngestionMode == .legacyScreenCapture
+            ? permissionManager.status()
+            : PermissionStatus(accessibility: false, screenRecording: false)
         let analysisTarget = AnalysisTarget(window)
         let minimumMeaningfulTextLength = config.minimumMeaningfulTextLength
         let preferAccessibility = role == .primary || window.isFocused
@@ -769,17 +781,40 @@ private struct SessionObservationExtraction: Sendable {
 }
 
 private actor SessionAnalysisWorker {
+    private let textIngestionMode: TextIngestionMode
+    private let codexRolloutSource: CodexRolloutTextSource?
     private let accessibilityExtractor = AccessibilityTextExtractor()
     private let ocrService = WindowOCRService()
+
+    init(
+        textIngestionMode: TextIngestionMode,
+        codexRolloutSource: CodexRolloutTextSource?
+    ) {
+        self.textIngestionMode = textIngestionMode
+        self.codexRolloutSource = codexRolloutSource
+    }
 
     func extractObservation(
         for window: TrackedWindow,
         permissions: PermissionStatus,
         minimumMeaningfulTextLength: Int,
         preferAccessibility: Bool
-    ) -> SessionObservationExtraction {
+    ) async -> SessionObservationExtraction {
         if Task.isCancelled {
             return SessionObservationExtraction(observation: nil, reason: "cancelled")
+        }
+
+        if textIngestionMode == .codexSessions {
+            if let codexObservation = await codexRolloutSource?.nextObservation(
+                minimumMeaningfulTextLength: minimumMeaningfulTextLength
+            ) {
+                return SessionObservationExtraction(
+                    observation: codexObservation,
+                    reason: "codex_sessions"
+                )
+            }
+
+            return SessionObservationExtraction(observation: nil, reason: "codex_sessions_empty")
         }
 
         let now = Date()

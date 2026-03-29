@@ -3,7 +3,7 @@ import Foundation
 
 enum HateMailWriterError: LocalizedError {
     case featureDisabled
-    case coolingDown
+    case coolingDown(remaining: TimeInterval)
     case desktopUnavailable
     case folderCreationFailed(Error)
     case writeFailed(Error)
@@ -12,8 +12,8 @@ enum HateMailWriterError: LocalizedError {
         switch self {
         case .featureDisabled:
             return "Hate mail is disabled."
-        case .coolingDown:
-            return "This Angy is still cooling down."
+        case .coolingDown(let remaining):
+            return "This Angy is still cooling down. Try again in \(Self.formattedDuration(remaining))."
         case .desktopUnavailable:
             return "The Desktop folder is unavailable."
         case .folderCreationFailed(let error):
@@ -21,6 +21,22 @@ enum HateMailWriterError: LocalizedError {
         case .writeFailed(let error):
             return "Could not write the hate-mail file: \(error.localizedDescription)"
         }
+    }
+
+    private static func formattedDuration(_ remaining: TimeInterval) -> String {
+        let roundedSeconds = max(1, Int(ceil(remaining)))
+        let minutes = roundedSeconds / 60
+        let seconds = roundedSeconds % 60
+
+        if minutes > 0, seconds > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+
+        if minutes > 0 {
+            return "\(minutes)m"
+        }
+
+        return "\(seconds)s"
     }
 }
 
@@ -38,7 +54,8 @@ actor HateMailWriter {
     func writeMail(
         for snapshot: AngyInstanceSnapshot,
         config: AppConfig,
-        enabled: Bool
+        enabled: Bool,
+        force: Bool = false
     ) throws -> URL {
         guard enabled else {
             throw HateMailWriterError.featureDisabled
@@ -46,8 +63,11 @@ actor HateMailWriter {
 
         let now = Date()
         if let lastWriteDate = lastWriteDates[snapshot.id],
-           now.timeIntervalSince(lastWriteDate) < config.hateMailCooldown {
-            throw HateMailWriterError.coolingDown
+           !force {
+            let elapsed = now.timeIntervalSince(lastWriteDate)
+            if elapsed < config.hateMailCooldown {
+                throw HateMailWriterError.coolingDown(remaining: config.hateMailCooldown - elapsed)
+            }
         }
 
         guard let desktopURL = baseDirectoryProvider() else {

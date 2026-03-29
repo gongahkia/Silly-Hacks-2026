@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
     private let config: AppConfig
+    private let launchOptions: AngyLaunchOptions
     private let debugMonitor = DebugMonitor.shared
     private let windowCatalogService = WindowCatalogService()
     private let hateMailWriter = HateMailWriter()
@@ -21,12 +22,18 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
     private var isStatusMenuOpen = false
     private var needsStatusMenuRebuild = false
 
-    init(config: AppConfig) {
+    init(
+        config: AppConfig,
+        launchOptions: AngyLaunchOptions
+    ) {
         self.config = config
+        self.launchOptions = launchOptions
         self.primaryController = AngyInstanceController(
             id: AngyInstanceID(rawValue: "primary"),
             role: .primary,
             config: config,
+            textIngestionMode: launchOptions.textIngestionMode,
+            codexHomeDirectory: launchOptions.codexHomeDirectory,
             trackingSource: WindowTracker(config: config),
             managesPermissions: true,
             warmStickersOnStart: true,
@@ -174,7 +181,8 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
                 let url = try await hateMailWriter.writeMail(
                     for: controller.snapshot(),
                     config: config,
-                    enabled: hateMailEnabled
+                    enabled: hateMailEnabled,
+                    force: request.force == true
                 )
                 statusMessage = "Wrote hate mail to \(url.lastPathComponent)."
                 requestStatusMenuRebuild()
@@ -407,6 +415,8 @@ final class AngyHiveCoordinator: NSObject, NSMenuDelegate {
             id: instanceID,
             role: .spawned,
             config: config,
+            textIngestionMode: launchOptions.textIngestionMode,
+            codexHomeDirectory: launchOptions.codexHomeDirectory,
             trackingSource: PinnedWindowTracker(
                 windowID: window.windowID,
                 refreshInterval: config.spawnedWindowRefreshInterval

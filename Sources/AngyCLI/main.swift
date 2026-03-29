@@ -24,6 +24,10 @@ private struct SettingBody: Codable {
     let value: String
 }
 
+private struct HateMailBody: Codable {
+    let force: Bool
+}
+
 @main
 struct AngyCLIMain {
     static func main() async {
@@ -155,7 +159,9 @@ private struct AngyCLI {
             guard let id = remaining.first else {
                 throw CLIError.usage
             }
-            let response = try await send(method: "POST", path: "/v1/instances/\(encode(id))/hate-mail", body: Data())
+            let force = remaining.dropFirst().contains("--force")
+            let body = try JSONEncoder().encode(HateMailBody(force: force))
+            let response = try await send(method: "POST", path: "/v1/instances/\(encode(id))/hate-mail", body: body)
             try printResponse(response, jsonOutput: false)
         default:
             throw CLIError.usage
@@ -275,7 +281,7 @@ private enum CLIError: LocalizedError {
               AngyCLI instances set-state <id|#tag> <calm|curious|annoyed|furious>
               AngyCLI instances clear-state <id|#tag>
               AngyCLI instances explode <id|#tag>
-              AngyCLI instances hate-mail <id|#tag>
+              AngyCLI instances hate-mail <id|#tag> [--force]
               AngyCLI settings get [--json]
               AngyCLI settings set <key> <value>
             """

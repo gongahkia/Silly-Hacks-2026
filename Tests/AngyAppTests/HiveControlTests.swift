@@ -55,8 +55,72 @@ final class HiveControlTests: XCTestCase {
             )
             XCTFail("Expected a cooldown error on the second write.")
         } catch let error as HateMailWriterError {
-            XCTAssertEqual(error.errorDescription, HateMailWriterError.coolingDown.errorDescription)
+            guard case .coolingDown(let remaining) = error else {
+                return XCTFail("Expected a coolingDown error.")
+            }
+            XCTAssertGreaterThan(remaining, 0)
+            XCTAssertEqual(error.errorDescription, "This Angy is still cooling down. Try again in 1m.")
         }
+    }
+
+    func testHateMailWriterForceBypassesCooldown() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("angy-hate-mail-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let writer = HateMailWriter(baseDirectoryProvider: { tempDirectory })
+        let snapshot = makeSnapshot(id: "spawned-1", tag: "#1")
+
+        var config = AppConfig.live
+        config.hateMailCooldown = 60
+
+        _ = try await writer.writeMail(
+            for: snapshot,
+            config: config,
+            enabled: true
+        )
+
+        do {
+            _ = try await writer.writeMail(
+                for: snapshot,
+                config: config,
+                enabled: true,
+                force: true
+            )
+        } catch {
+            XCTFail("Expected force=true to bypass cooldown, got \(error.localizedDescription)")
+        }
+    }
+
+    func testControlPlaneRoutesForcedHateMailRequests() async throws {
+        let recorder = RequestRecorder()
+        let server = AngyControlPlaneServer(config: .live) { request in
+            await recorder.record(request)
+            return AngyControlResponse(ok: true, message: "wrote")
+        }
+        try server.start()
+        defer { server.stop() }
+
+        let discovery = try loadDiscovery()
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(discovery.port)/v1/instances/%231/hate-mail")!)
+        request.httpMethod = "POST"
+        request.setValue(discovery.token, forHTTPHeaderField: "X-Angy-Token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = Data(#"{"force":true}"#.utf8)
+        request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
+        let decoded = try JSONDecoder().decode(AngyControlResponse.self, from: data)
+        XCTAssertEqual(httpResponse.statusCode, 200, decoded.message ?? "no message")
+        XCTAssertTrue(decoded.ok)
+
+        let recordedRequest = await recorder.lastRequest
+        XCTAssertEqual(recordedRequest?.action, .writeHateMail)
+        XCTAssertEqual(recordedRequest?.instanceTag, "#1")
+        XCTAssertEqual(recordedRequest?.force, true)
     }
 
     func testControlPlaneRejectsUnauthorizedRequests() async throws {

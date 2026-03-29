@@ -162,6 +162,7 @@ public struct AngyControlRequest: Codable, Sendable, Equatable {
     public var action: AngyControlAction
     public var instanceID: AngyInstanceID?
     public var instanceTag: String?
+    public var force: Bool?
     public var windowID: UInt32?
     public var settingKey: String?
     public var settingValue: String?
@@ -171,6 +172,7 @@ public struct AngyControlRequest: Codable, Sendable, Equatable {
         action: AngyControlAction,
         instanceID: AngyInstanceID? = nil,
         instanceTag: String? = nil,
+        force: Bool? = nil,
         windowID: UInt32? = nil,
         settingKey: String? = nil,
         settingValue: String? = nil,
@@ -179,6 +181,7 @@ public struct AngyControlRequest: Codable, Sendable, Equatable {
         self.action = action
         self.instanceID = instanceID
         self.instanceTag = instanceTag
+        self.force = force
         self.windowID = windowID
         self.settingKey = settingKey
         self.settingValue = settingValue

@@ -49,6 +49,10 @@ private struct SettingBody: Codable {
     let value: String
 }
 
+private struct HateMailRequestBody: Codable {
+    let force: Bool?
+}
+
 final class AngyControlPlaneServer {
     private let config: AppConfig
     private let token = UUID().uuidString.lowercased()
@@ -341,7 +345,12 @@ final class AngyControlPlaneServer {
                pathComponents[0] == "v1",
                pathComponents[1] == "instances",
                pathComponents[3] == "hate-mail" {
-                return (200, await handler(instanceRequest(action: .writeHateMail, from: pathComponents[2])))
+                var controlRequest = instanceRequest(action: .writeHateMail, from: pathComponents[2])
+                if !request.body.isEmpty {
+                    let body = try decode(HateMailRequestBody.self, from: request.body)
+                    controlRequest.force = body.force
+                }
+                return (200, await handler(controlRequest))
             }
 
             if request.method == "POST", pathComponents == ["v1", "settings"] {
