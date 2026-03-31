@@ -101,7 +101,7 @@ public extension AppConfig {
         soundEnabled: true,
         explosionThreshold: 95,
         explosionHoldDuration: 3.0,
-        tombstoneDuration: 3.0,
+        tombstoneDuration: 15.0,
         explosionCooldown: 20.0,
         spawnedWindowRefreshInterval: 0.25,
         hateMailCooldown: 600.0,

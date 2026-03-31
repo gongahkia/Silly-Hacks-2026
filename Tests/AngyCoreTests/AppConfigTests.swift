@@ -16,5 +16,6 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(AppConfig.live.spawnedWindowRefreshInterval, 0.25, accuracy: 0.001)
         XCTAssertEqual(AppConfig.live.hateMailCooldown, 600, accuracy: 0.001)
         XCTAssertEqual(AppConfig.live.hateMailOutputFolderName, "Angy Hate Mail")
+        XCTAssertEqual(AppConfig.live.tombstoneDuration, 15, accuracy: 0.001)
     }
 }

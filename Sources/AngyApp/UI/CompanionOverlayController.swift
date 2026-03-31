@@ -7,6 +7,7 @@ final class CompanionOverlayController {
     private let config: AppConfig
     private let panel: CompanionOverlayPanel
     private let contentView: CompanionOverlayView
+    private let confettiOverlayController = ConfettiOverlayController()
     private var lastPresentedWindow: TrackedWindow?
     private var lastPresentation: OverlayPresentationState?
     private var cachedOverlaySize = NSSize(width: 120, height: 120)
@@ -33,12 +34,14 @@ final class CompanionOverlayController {
             lastPresentation = presentation
             contentView.update(presentation: presentation)
         }
+        confettiOverlayController.setVisible(presentation.effectPhase == .tombstone)
         refreshPanelFrame()
     }
 
     func hide() {
         lastPresentedWindow = nil
         panel.orderOut(nil)
+        confettiOverlayController.setVisible(false)
     }
 
     private func refreshPanelFrame() {
