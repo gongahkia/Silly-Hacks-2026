@@ -68,11 +68,17 @@ final class SoundEffectPlayer {
         let supportedExtensions = ["wav", "aiff", "aif", "m4a", "mp3"]
 
         for fileExtension in supportedExtensions {
-            if let url = bundle.url(
+            let directURL = bundle.url(
+                forResource: event.rawValue,
+                withExtension: fileExtension
+            )
+            let nestedURL = bundle.url(
                 forResource: event.rawValue,
                 withExtension: fileExtension,
                 subdirectory: "Sounds"
-            ) {
+            )
+
+            if let url = directURL ?? nestedURL {
                 return url
             }
         }

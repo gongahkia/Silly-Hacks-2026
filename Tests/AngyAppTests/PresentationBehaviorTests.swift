@@ -129,6 +129,18 @@ final class PresentationBehaviorTests: XCTestCase {
         XCTAssertEqual(backend.beepCount, 0)
     }
 
+    func testSoundPlayerPrefersBundledSoundsWhenAvailable() {
+        let backend = SuccessfulResourceSoundBackend()
+        let player = SoundEffectPlayer(config: .live, backend: backend)
+
+        player.play(.blocked)
+
+        XCTAssertEqual(backend.resourceURLs.count, 1)
+        XCTAssertEqual(backend.resourceURLs.first?.deletingPathExtension().lastPathComponent, "blocked")
+        XCTAssertTrue(backend.systemSoundNames.isEmpty)
+        XCTAssertEqual(backend.beepCount, 0)
+    }
+
     func testASCIIStickerRendererPreservesVerticalOrientation() async throws {
         let sourceImage = try XCTUnwrap(makeVerticalSplitImage(width: 20, height: 20))
         let assetSource = StickerAssetSource.rasterFrames([
@@ -266,6 +278,26 @@ private final class RecordingSoundBackend: SoundPlaybackBackend {
     func playResource(at url: URL) -> Bool {
         resourceURLs.append(url)
         return false
+    }
+
+    func playSystemSound(named name: String) -> Bool {
+        systemSoundNames.append(name)
+        return true
+    }
+
+    func beep() {
+        beepCount += 1
+    }
+}
+
+private final class SuccessfulResourceSoundBackend: SoundPlaybackBackend {
+    private(set) var resourceURLs: [URL] = []
+    private(set) var systemSoundNames: [String] = []
+    private(set) var beepCount = 0
+
+    func playResource(at url: URL) -> Bool {
+        resourceURLs.append(url)
+        return true
     }
 
     func playSystemSound(named name: String) -> Bool {
