@@ -1,6 +1,51 @@
-# Angy
+# `Angy` - So Codex can finally judge you
 
-## Requirements
+<div align="center">
+	<img src="https://github.com/user-attachments/assets/3faaf764-dc57-4baa-807f-c65ce049da9e">
+	<br>
+	<i>I have no mouth but I must meme.</i>
+</div>
+
+## Demo
+
+![](./asset/demo.gif)
+
+## Team Members
+
+<table>
+	<tbody>
+        <tr>
+            <td align="center">
+                <a href="https://github.com/weisintai">
+                    <img src="https://avatars.githubusercontent.com/u/59339889?v=4" width="100;" alt=""/>
+                    <br />
+                    <sub><b>Wei Sin</b></sub>
+                </a>
+                <br />
+            </td>
+            <td align="center">
+                <a href="https://github.com/injaneity">
+                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt=""/>
+                    <br />
+                    <sub><b>Zane Chee</b></sub>
+                </a>
+                <br />
+            </td> 
+            <td align="center">
+                <a href="https://github.com/gongahkia">
+                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
+                    <br />
+                    <sub><b>Gabriel Ong</b></sub>
+                </a>
+                <br />
+            </td>
+        </tr>
+	</tbody>
+</table>
+
+## Usage
+
+### Requirements
 
 - macOS 14+
 - Codex CLI logged in (`codex login`)
@@ -11,21 +56,13 @@
 By default, Angy reads Codex assistant output from `~/.codex/sessions/**/rollout-*.jsonl`.
 If you use legacy mode, only one permission is required for degraded extraction, and both permissions together unlock the full Accessibility+OCR path.
 
-## Run
-
-Start the app:
+### Run `Angy`
 
 ```bash
 swift run Angy
 ```
 
-Legacy screen-reading mode (the old behavior):
-
-```bash
-swift run Angy -- --legacy
-```
-
-Useful environment variables:
+### Optional `.env` config
 
 ```bash
 ANGY_DEBUG=1 swift run Angy
@@ -34,10 +71,7 @@ ANGY_CODEX_HOME=/absolute/path/to/.codex swift run Angy
 ANGY_LEGACY=1 swift run Angy
 ```
 
-In default mode, Angy does not require macOS Accessibility/Screen Recording permissions.
-In legacy mode, Angy will prompt for missing permissions and can open the relevant System Settings pages.
-
-### App Server setup (optional)
+### Optional Codex App Server setup
 
 If you want Codex running through an explicit app-server endpoint:
 
@@ -54,7 +88,7 @@ swift run Angy
 
 As long as Codex writes session rollouts into the same `~/.codex` directory Angy is watching, Angy picks up the assistant output.
 
-## CLI
+### CLI
 
 The CLI talks to the running app's local control plane, so `Angy` must already be running.
 
@@ -102,46 +136,7 @@ Currently supported mutable settings are:
 - `pauseAll`
 - `hateMailEnabled`
 
-## Test
-
-```bash
-swift test
-```
-
-## Team Members
-
-<table>
-	<tbody>
-        <tr>
-            <td align="center">
-                <a href="https://github.com/weisintai">
-                    <img src="https://avatars.githubusercontent.com/u/59339889?v=4" width="100;" alt=""/>
-                    <br />
-                    <sub><b>Wei Sin</b></sub>
-                </a>
-                <br />
-            </td>
-            <td align="center">
-                <a href="https://github.com/injaneity">
-                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt=""/>
-                    <br />
-                    <sub><b>Zane Chee</b></sub>
-                </a>
-                <br />
-            </td> 
-            <td align="center">
-                <a href="https://github.com/gongahkia">
-                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
-                    <br />
-                    <sub><b>Gabriel Ong</b></sub>
-                </a>
-                <br />
-            </td>
-        </tr>
-	</tbody>
-</table>
-
-## Repo notes
+## Nerd details 
 
 - [Package.swift](Package.swift) defines the package targets `Angy`, `AngyCore`, `AngyCLI`, `AngyCoreTests`, and `AngyAppTests`.
 - [Sources/AngyApp/AngyHiveCoordinator.swift](Sources/AngyApp/AngyHiveCoordinator.swift) owns the menu-bar app, spawned companion lifecycle, and control plane.
