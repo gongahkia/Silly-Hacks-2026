@@ -6,10 +6,6 @@
 	<i>I have no mouth but I must meme.</i>
 </div>
 
-## Demo
-
-![](./asset/demo.gif)
-
 ## Team Members
 
 <table>
